@@ -1,0 +1,189 @@
+{
+  "projectType": "general",
+  "projectName": "NEAR Protocol",
+  "projectDescription": "Scalable blockchain platform with AI-native infrastructure and seamless multi-chain capabilities for building decentralized applications.",
+  "theme": "palm",
+  "primaryColor": "#00C08B",
+  "lightColor": "#00E5A0",
+  "darkColor": "#00956F",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Getting Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "faucet"
+            ]
+          },
+          {
+            "group": "Protocol",
+            "pages": [
+              "protocol/basics",
+              "protocol/account-model",
+              "protocol/account-id",
+              "protocol/access-keys",
+              "protocol/transactions",
+              "protocol/transaction-anatomy",
+              "protocol/gas",
+              "protocol/storage",
+              "protocol/validators",
+              "protocol/networks",
+              "protocol/architecture"
+            ]
+          },
+          {
+            "group": "Smart Contracts",
+            "pages": [
+              "smart-contracts/what-is",
+              "smart-contracts/quickstart",
+              "smart-contracts/anatomy",
+              "smart-contracts/functions",
+              "smart-contracts/storage",
+              "smart-contracts/crosscontract",
+              "smart-contracts/testing",
+              "smart-contracts/security",
+              "smart-contracts/deploy",
+              "smart-contracts/upgrade"
+            ]
+          },
+          {
+            "group": "Web3 Applications",
+            "pages": [
+              "web3-apps/what-is",
+              "web3-apps/quickstart",
+              "web3-apps/wallet-login",
+              "web3-apps/integrate-contracts",
+              "web3-apps/backend-login"
+            ]
+          },
+          {
+            "group": "AI and Agents",
+            "pages": [
+              "ai/introduction",
+              "ai/near-mcp",
+              "ai/shade-agents/introduction",
+              "ai/shade-agents/quickstart",
+              "ai/shade-agents/framework-overview",
+              "ai/shade-agents/security",
+              "ai/shade-agents/api-reference"
+            ]
+          },
+          {
+            "group": "Chain Abstraction",
+            "pages": [
+              "chain-abstraction/what-is",
+              "chain-abstraction/chain-signatures",
+              "chain-abstraction/intents",
+              "chain-abstraction/omnibridge",
+              "chain-abstraction/meta-transactions"
+            ]
+          },
+          {
+            "group": "Primitives",
+            "pages": [
+              "primitives/what-is",
+              "primitives/fungible-tokens",
+              "primitives/non-fungible-tokens",
+              "primitives/dao",
+              "primitives/dex",
+              "primitives/oracles",
+              "primitives/staking"
+            ]
+          },
+          {
+            "group": "Data Infrastructure",
+            "pages": [
+              "data-infrastructure/what-is",
+              "data-infrastructure/indexers",
+              "data-infrastructure/near-lake-framework",
+              "data-infrastructure/big-query",
+              "data-infrastructure/data-apis"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "API Reference",
+        "groups": [
+          {
+            "group": "RPC API",
+            "pages": [
+              "api/rpc/introduction",
+              "api/rpc/setup",
+              "api/rpc/providers",
+              "api/rpc/access-keys",
+              "api/rpc/contracts",
+              "api/rpc/transactions",
+              "api/rpc/block-chunk",
+              "api/rpc/gas",
+              "api/rpc/network",
+              "api/rpc/protocol",
+              "api/rpc/errors"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Tutorials",
+        "groups": [
+          {
+            "group": "Protocol Basics",
+            "pages": [
+              "tutorials/create-account",
+              "tutorials/importing-account"
+            ]
+          },
+          {
+            "group": "Smart Contracts",
+            "pages": [
+              "tutorials/basic-contracts",
+              "tutorials/cross-contract-calls",
+              "tutorials/factory-contracts",
+              "tutorials/update-migrate-state"
+            ]
+          },
+          {
+            "group": "Multi-Chain",
+            "pages": [
+              "tutorials/controlling-near-accounts",
+              "tutorials/multichain-dao"
+            ]
+          },
+          {
+            "group": "Full Stack",
+            "pages": [
+              "tutorials/auction-example",
+              "tutorials/nft-tutorial",
+              "tutorials/ft-tutorial"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Layer-1 sharded proof-of-stake blockchain",
+    "Named accounts and account abstraction",
+    "Smart contracts in JavaScript and Rust",
+    "AI-native infrastructure with Shade Agents",
+    "Multi-chain accounts via Chain Signatures",
+    "Fast finality (~1.3s) and low fees",
+    "Built-in primitives (FT, NFT, DAO)",
+    "Comprehensive data infrastructure and indexers"
+  ],
+  "publicApiSurface": [
+    "RPC API - query blocks, transactions, accounts, contracts",
+    "NEAR CLI - command-line interface for account and contract management",
+    "NEAR SDK (Rust) - smart contract development framework",
+    "NEAR SDK (JavaScript) - smart contract development framework",
+    "NEAR API JS - JavaScript library for interacting with NEAR",
+    "Chain Signatures API - multi-chain transaction signing",
+    "Shade Agents Framework - AI agent development",
+    "NEAR Lake Framework - blockchain data indexing",
+    "BigQuery Public Dataset - historical blockchain data"
+  ]
+}
