@@ -1,0 +1,228 @@
+---
+title: Implementing chain signatures
+description: Learn how to sign transactions across multiple blockchains with NEAR chain signatures
+---
+
+Chain signatures enable NEAR accounts, including smart contracts, to sign and execute transactions across many blockchain protocols. This unlocks the next level of blockchain interoperability by giving ownership of diverse assets, cross-chain accounts, and data to a single NEAR account.
+
+<Info>
+**Supported networks**: Bitcoin, Solana, Cosmos, XRP, Aptos, Sui, and EVM networks (Ethereum, Base, BNB Chain, Avalanche, Polygon, Arbitrum, and more).
+</Info>
+
+## Create a chain signature
+
+There are five steps to create a chain signature:
+
+<Steps>
+  <Step title="Derive the foreign address">
+    Derive the address that will be controlled on the target blockchain
+  </Step>
+  
+  <Step title="Create the transaction">
+    Create the transaction or message to be signed
+  </Step>
+  
+  <Step title="Request a signature">
+    Call the NEAR MPC contract requesting it to sign the transaction
+  </Step>
+  
+  <Step title="Format the signature">
+    Format the signature from the MPC contract and add it to the transaction
+  </Step>
+  
+  <Step title="Relay the signed transaction">
+    Send the signed transaction to the destination chain for execution
+  </Step>
+</Steps>
+
+## MPC contracts
+
+The Multi-Party Computation (MPC) contract is available on both mainnet and testnet:
+
+- **Mainnet**: `v1.signer`
+- **Testnet**: `v1.signer-prod.testnet`
+
+The MPC network consists of 8 independent nodes that collectively generate signatures without any single node having access to the complete private key.
+
+## Chain signatures library
+
+The [`chainsig.js`](https://github.com/NearDeFi/chainsig.js) library provides a convenient interface for completing each signature step.
+
+### Installation
+
+<CodeGroup>
+```bash npm
+npm install @near-wallet-selector/core
+```
+
+```bash yarn
+yarn add @near-wallet-selector/core
+```
+</CodeGroup>
+
+### Instantiate the contract
+
+```javascript
+import { ChainSignaturesContract } from '@near-wallet-selector/core';
+
+const chainSigContract = new ChainSignaturesContract({
+  networkId: 'testnet',
+  contractId: 'v1.signer-prod.testnet'
+});
+```
+
+## Chain adapters
+
+To interact with a specific chain, instantiate the relevant chain adapter:
+
+<Tabs>
+  <Tab title="EVM">
+    ```javascript
+    import { setupEthereumEip1193 } from '@near-relay/client';
+    
+    const ethAdapter = await setupEthereumEip1193({
+      chainSignaturesContract: chainSigContract,
+      publicClient: evmRpcUrl
+    });
+    
+    // Derive Ethereum address
+    const ethAddress = await ethAdapter.deriveAddress('myPath');
+    
+    // Sign transaction
+    const signature = await ethAdapter.signTransaction(transaction);
+    ```
+  </Tab>
+  
+  <Tab title="Bitcoin">
+    ```javascript
+    import { setupBitcoin } from '@near-relay/client';
+    
+    const btcAdapter = await setupBitcoin({
+      chainSignaturesContract: chainSigContract,
+      network: 'mainnet'
+    });
+    
+    // Derive Bitcoin address
+    const btcAddress = await btcAdapter.deriveAddress('myPath');
+    
+    // Sign transaction
+    const signature = await btcAdapter.signTransaction(psbt);
+    ```
+  </Tab>
+  
+  <Tab title="Solana">
+    ```javascript
+    import { setupSolana } from '@near-relay/client';
+    
+    const solAdapter = await setupSolana({
+      chainSignaturesContract: chainSigContract
+    });
+    
+    // Derive Solana address
+    const solAddress = await solAdapter.deriveAddress('myPath');
+    
+    // Sign transaction
+    const signature = await solAdapter.signTransaction(transaction);
+    ```
+  </Tab>
+</Tabs>
+
+## Smart contract integration
+
+For building transactions inside NEAR smart contracts written in Rust, use the [Omni Transaction](https://github.com/near/omni-transaction-rs) library:
+
+```rust
+use omni_transaction::near::types::ext_mpc;
+use near_sdk::{near, Promise};
+
+#[near]
+impl Contract {
+    pub fn sign_ethereum_transaction(&self, tx: Vec<u8>, path: String) -> Promise {
+        ext_mpc::ext("v1.signer-prod.testnet".parse().unwrap())
+            .with_static_gas(Gas::from_tgas(250))
+            .sign(tx, path, 0)
+    }
+}
+```
+
+## Example: Send Ethereum transaction
+
+Complete example of sending ETH using chain signatures:
+
+```javascript
+import { setupEthereumEip1193 } from '@near-relay/client';
+import { ethers } from 'ethers';
+
+async function sendEth() {
+  // Setup adapter
+  const ethAdapter = await setupEthereumEip1193({
+    chainSignaturesContract: {
+      networkId: 'testnet',
+      contractId: 'v1.signer-prod.testnet'
+    },
+    publicClient: 'https://eth.llamarpc.com'
+  });
+  
+  // Derive address
+  const fromAddress = await ethAdapter.deriveAddress('my-eth-path');
+  console.log(`Sending from: ${fromAddress}`);
+  
+  // Create transaction
+  const tx = {
+    to: '0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb',
+    value: ethers.parseEther('0.01'),
+    gasLimit: 21000
+  };
+  
+  // Sign and send
+  const signature = await ethAdapter.signTransaction(tx);
+  const txHash = await ethAdapter.broadcastTransaction(signature);
+  
+  console.log(`Transaction hash: ${txHash}`);
+}
+```
+
+## Security considerations
+
+<AccordionGroup>
+  <Accordion title="Path management">
+    - Use unique paths for different use cases
+    - Never share paths publicly for accounts controlling valuable assets
+    - Consider using account-specific prefixes
+    - Document your path naming conventions
+  </Accordion>
+  
+  <Accordion title="Key security">
+    - Your NEAR private key controls all derived addresses
+    - Use hardware wallets for mainnet accounts
+    - Implement access controls for contract-based signing
+    - Regular security audits for production systems
+  </Accordion>
+  
+  <Accordion title="Transaction validation">
+    - Always verify transaction details before signing
+    - Check recipient addresses carefully
+    - Validate amounts and gas settings
+    - Test thoroughly on testnet first
+  </Accordion>
+</AccordionGroup>
+
+## What's next?
+
+<CardGroup cols={2}>
+  <Card title="Controlling NEAR accounts tutorial" icon="key" href="/tutorials/controlling-near-accounts">
+    Learn to control NEAR accounts from other chains
+  </Card>
+  
+  <Card title="Multi-chain DAO" icon="users" href="/tutorials/multichain-dao">
+    Build a DAO that governs multiple blockchains
+  </Card>
+  
+  <Card title="Chain signatures overview" icon="signature" href="/chain-abstraction/chain-signatures">
+    Understand the architecture and benefits
+  </Card>
+  
+  <Card title="GitHub examples" icon="github" href="https://github.com/near-examples/near-multichain">
+    Explore complete code examples
+  </Card>
+</CardGroup>

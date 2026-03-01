@@ -1,0 +1,112 @@
+---
+title: Using NEAR docs with AI coding agents
+description: Using llms.txt to improve your workflow when using AI coding agents
+---
+
+NEAR Docs hosts an [`llms.txt`](https://docs.near.org/llms.txt) file to provide information to help LLMs use the complete NEAR documentation at inference time.
+
+While websites serve both human readers and LLMs, LLMs benefit from concise information gathered in a single, accessible location. This is critical for use cases like development environments, where LLMs need quick access to programming documentation and APIs.
+
+<Info>
+If you want to learn more about the `llms.txt` standard, check [llmstxt.org](https://llmstxt.org/).
+</Info>
+
+## Using llms.txt
+
+The `llms.txt` core purpose is to provide context that the AI agent can reference before generating or modifying code.
+
+Using an `llms.txt` file as a reference for AI coding agents is an advanced technique to guide the AI's behavior, improve code quality, and enforce project-specific patterns. It's essentially a way to provide contextual, in-the-flow documentation.
+
+Next, you can find examples of how to integrate `llms.txt` with Visual Studio Code and Cursor.
+
+## Visual Studio Code
+
+To use [NEAR Docs llms.txt](https://docs.near.org/llms.txt) as reference when working with Copilot Chat:
+
+<Steps>
+  <Step title="Open Copilot Chat">
+    Open the Copilot Chat sidebar in VS Code.
+  </Step>
+  
+  <Step title="Ask your question with reference">
+    Use the `#fetch` keyword to add the llms.txt as reference:
+    
+    ```
+    How can I upgrade a contract state?
+    #fetch https://docs.near.org/llms.txt
+    ```
+  </Step>
+  
+  <Step title="Get AI-generated answers">
+    Receive answers with direct reference links from the NEAR documentation site.
+  </Step>
+</Steps>
+
+## Cursor
+
+When using Cursor, you can add [NEAR Docs llms.txt](https://docs.near.org/llms.txt) as documentation reference:
+
+<Steps>
+  <Step title="Open Cursor Chat">
+    Click on the Chat window in Cursor.
+  </Step>
+  
+  <Step title="Add documentation">
+    1. Click on `@`
+    2. Select `Docs`
+    3. Click `+ Add new doc`
+    4. Enter in the text box:
+    
+    ```
+    https://docs.near.org/llms.txt
+    ```
+  </Step>
+  
+  <Step title="Use NEAR docs as reference">
+    Select `NEAR Protocol` as documentation reference when asking questions.
+  </Step>
+  
+  <Step title="Get contextual answers">
+    Receive AI-generated answers based on NEAR documentation.
+  </Step>
+</Steps>
+
+## Benefits
+
+<CardGroup cols={2}>
+  <Card title="Accurate code generation" icon="code">
+    AI agents generate code that follows NEAR best practices and conventions
+  </Card>
+  
+  <Card title="Up-to-date information" icon="clock">
+    Always reference the latest NEAR documentation and APIs
+  </Card>
+  
+  <Card title="Faster development" icon="bolt">
+    Reduce time spent searching documentation manually
+  </Card>
+  
+  <Card title="Consistent patterns" icon="check">
+    Maintain code consistency across your project
+  </Card>
+</CardGroup>
+
+## What's next?
+
+<CardGroup cols={2}>
+  <Card title="NEAR MCP Server" icon="server" href="/ai/near-mcp">
+    Use the Model Context Protocol for deeper AI integration
+  </Card>
+  
+  <Card title="Build AI agents" icon="brain-circuit" href="/ai/shade-agents/introduction">
+    Create autonomous AI agents on NEAR
+  </Card>
+  
+  <Card title="Start building" icon="rocket" href="/smart-contracts/quickstart">
+    Begin developing on NEAR with AI assistance
+  </Card>
+  
+  <Card title="Join Discord" icon="discord" href="https://near.chat">
+    Get help from the NEAR developer community
+  </Card>
+</CardGroup>

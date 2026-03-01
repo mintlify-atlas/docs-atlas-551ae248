@@ -76,6 +76,7 @@
             "group": "AI and Agents",
             "pages": [
               "ai/introduction",
+              "ai/llms",
               "ai/near-mcp",
               "ai/shade-agents/introduction",
               "ai/shade-agents/quickstart",

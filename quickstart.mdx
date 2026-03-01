@@ -1,301 +1,187 @@
 ---
-title: 'Quick Start'
-description: 'Get up and running with NEAR Protocol in minutes'
-icon: 'rocket'
+title: Quick start
+description: Get up and running with NEAR Protocol in minutes
 ---
 
-## Overview
-
-This guide will help you get started with NEAR Protocol quickly. You'll learn how to create an account, get testnet tokens, and interact with the blockchain.
-
-<Note>
-  This quickstart focuses on testnet development. Once you're comfortable, you can deploy to mainnet.
-</Note>
+Get started with NEAR Protocol by creating an account, getting testnet tokens, and making your first transaction.
 
 ## Prerequisites
 
 Before you begin, make sure you have:
+- A terminal or command line interface
+- Node.js 18+ installed (for JavaScript development)
+- Basic familiarity with command line tools
+
+## Choose your path
 
 <CardGroup cols={2}>
-  <Card title="Node.js" icon="node-js">
-    Version 18 or higher recommended
+  <Card title="Build a smart contract" icon="code" href="/smart-contracts/quickstart">
+    Create and deploy your first smart contract
   </Card>
-  <Card title="Terminal Access" icon="terminal">
-    Command line interface for running commands
+  
+  <Card title="Build a web3 app" icon="browser" href="/web3-apps/quickstart">
+    Build a frontend that interacts with NEAR
+  </Card>
+  
+  <Card title="Use AI agents" icon="brain-circuit" href="/ai/shade-agents/quickstart">
+    Deploy multi-chain AI agents
+  </Card>
+  
+  <Card title="Explore chain abstraction" icon="link" href="/chain-abstraction/what-is">
+    Learn about multi-chain capabilities
   </Card>
 </CardGroup>
 
-## Getting Started
+## Create a NEAR account
 
 <Steps>
-  <Step title="Create a NEAR Account">
-    You'll need a NEAR account to interact with the blockchain. NEAR uses human-readable account names like `alice.near` instead of cryptographic hashes.
-
-    ### Testnet Account (Recommended for Development)
-
-    Create a testnet account for free:
-
-    1. Visit the [NEAR Testnet Wallet](https://testnet.mynearwallet.com/)
-    2. Click "Create Account"
-    3. Choose your account name (e.g., `yourname.testnet`)
-    4. Secure your account with a passphrase or recovery method
-
-    <Tip>
-      Testnet accounts end with `.testnet` and are perfect for development and testing without spending real tokens.
-    </Tip>
-
-    ### Mainnet Account (For Production)
-
-    For production applications:
-
-    1. Visit [MyNEARWallet](https://app.mynearwallet.com/)
-    2. Follow the account creation flow
-    3. You can create an account with social login (Google, email, etc.)
-    4. Or use Telegram via [HERE Wallet bot](https://web.telegram.org/k/#@herewalletbot)
-
-    <Warning>
-      Keep your recovery phrase or seed phrase secure. This is the only way to recover your account if you lose access.
-    </Warning>
-  </Step>
-
-  <Step title="Get Testnet Tokens">
-    You'll need testnet NEAR tokens to pay for transactions and deploy contracts.
-
-    ### Using the Faucet
-
-    Visit the [faucet page](/faucet) or use one of these options:
-
-    1. **Built-in Faucet**: Input your testnet account name and request tokens
-    2. **External Faucet**: Visit [near-faucet.io](https://near-faucet.io/) for NEAR and other tokens (USDT, USDC, etc.)
-
-    <Info>
-      The faucet provides free testnet tokens. You'll typically receive 10-20 testnet NEAR tokens per request.
-    </Info>
-  </Step>
-
   <Step title="Install NEAR CLI">
-    The NEAR CLI is a command-line tool for interacting with the NEAR blockchain.
-
-    ```bash
-    npm install -g near-cli
+    Install the NEAR command-line interface:
+    
+    <CodeGroup>
+    ```bash macOS / Linux
+    curl --proto '=https' --tlsv1.2 -LsSf \
+      https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh \
+      | sh
     ```
-
-    Verify the installation:
-
-    ```bash
-    near --version
+    
+    ```bash Windows
+    irm https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.ps1 | iex
     ```
-
-    <Tip>
-      You can also use `npx near-cli` to run commands without installing globally.
-    </Tip>
+    </CodeGroup>
   </Step>
-
-  <Step title="Login to Your Account">
-    Connect NEAR CLI to your account:
-
+  
+  <Step title="Create a testnet account">
+    Create your first account on testnet:
+    
     ```bash
-    near login
+    near account create-account sponsor-by-faucet-service \
+      your-account-name.testnet \
+      autogenerate-new-keypair \
+      save-to-keychain \
+      network-config testnet \
+      create
     ```
-
-    This will:
-    1. Open a browser window
-    2. Ask you to authorize NEAR CLI
-    3. Save your credentials locally
-
-    For testnet development, use:
-
-    ```bash
-    export NEAR_ENV=testnet
-    near login
-    ```
-
-    <Note>
-      The `NEAR_ENV` environment variable determines which network (testnet or mainnet) you're connected to.
-    </Note>
+    
+    Replace `your-account-name` with your desired account name.
   </Step>
-
-  <Step title="Check Your Balance">
-    Verify your account has tokens:
-
+  
+  <Step title="Verify your account">
+    Check your account details:
+    
     ```bash
-    near state yourname.testnet
+    near account view-account-summary your-account-name.testnet \
+      network-config testnet \
+      now
     ```
-
-    This will display:
-    - Your account balance
-    - Storage usage
-    - Account status
-
-    Example output:
-    ```json
-    {
-      "amount": "100000000000000000000000000",
-      "block_height": 123456789,
-      "storage_usage": 182,
-      "formattedAmount": "100"
-    }
-    ```
-  </Step>
-
-  <Step title="Make Your First Transaction">
-    Try sending testnet tokens to another account:
-
-    ```bash
-    near send yourname.testnet recipient.testnet 1
-    ```
-
-    This sends 1 NEAR token from your account to `recipient.testnet`.
-
-    <Tip>
-      Transactions on NEAR finalize in approximately 1.3 seconds and cost less than 1¢ in fees.
-    </Tip>
   </Step>
 </Steps>
 
-## Next Steps
+## Get testnet tokens
 
-Now that you have an account and tokens, you're ready to build!
+Fund your account with testnet NEAR tokens:
+
+```bash
+near tokens your-account-name.testnet \
+  send-near faucet.testnet your-account-name.testnet '1 NEAR' \
+  network-config testnet
+```
+
+Or visit the [faucet page](/faucet) for alternative methods to get testnet tokens.
+
+## Make your first transaction
+
+Try sending tokens to another account:
+
+```bash
+near tokens your-account-name.testnet \
+  send-near your-account-name.testnet receiver.testnet '0.1 NEAR' \
+  network-config testnet
+```
+
+<Tip>
+All testnet transactions are free to experiment with. Use testnet extensively before moving to mainnet.
+</Tip>
+
+## What's next?
 
 <CardGroup cols={2}>
-  <Card
-    title="Build a Smart Contract"
-    icon="file-contract"
-    href="/smart-contracts/quickstart"
-  >
-    Create your first smart contract with JavaScript or Rust
+  <Card title="Build a smart contract" icon="code" href="/smart-contracts/quickstart">
+    Create your first smart contract in Rust or JavaScript
   </Card>
-  <Card
-    title="Build a Web3 App"
-    icon="browser"
-    href="/web3-apps/quickstart"
-  >
-    Develop a decentralized application with a frontend
+  
+  <Card title="Build a web3 app" icon="browser" href="/web3-apps/quickstart">
+    Connect a frontend to NEAR blockchain
   </Card>
-  <Card
-    title="Explore AI Agents"
-    icon="brain-circuit"
-    href="/ai/shade-agents/introduction"
-  >
-    Build multi-chain trustless AI agents
+  
+  <Card title="Learn the protocol" icon="book" href="/protocol/basics">
+    Understand how NEAR Protocol works
   </Card>
-  <Card
-    title="Learn Chain Abstraction"
-    icon="link"
-    href="/chain-abstraction/what-is"
-  >
-    Create cross-chain applications with NEAR
+  
+  <Card title="Explore examples" icon="code-branch" href="/tutorials/basic-contracts">
+    Browse working code examples
   </Card>
 </CardGroup>
 
-## Common Commands Reference
-
-Here are some useful NEAR CLI commands:
-
-<CodeGroup>
-
-```bash View Account
-# Check account state
-near state yourname.testnet
-
-# View account details
-near view-state yourname.testnet --finality final
-```
-
-```bash Send Tokens
-# Send NEAR tokens
-near send sender.testnet receiver.testnet 5
-
-# Send with a specific amount in yoctoNEAR
-near send sender.testnet receiver.testnet 5000000000000000000000000 --yocto
-```
-
-```bash Contract Interactions
-# Call a contract method (change state)
-near call contract.testnet method_name '{"arg": "value"}' --accountId yourname.testnet
-
-# View a contract method (read-only)
-near view contract.testnet view_method '{"arg": "value"}'
-```
-
-```bash Account Management
-# Create a sub-account
-near create-account sub.yourname.testnet --masterAccount yourname.testnet --initialBalance 10
-
-# Delete an account
-near delete-account yourname.testnet beneficiary.testnet
-```
-
-</CodeGroup>
-
-## Development Resources
-
-<CardGroup cols={3}>
-  <Card title="Examples" icon="code" href="https://github.com/near-examples">
-    Browse example projects and templates
-  </Card>
-  <Card title="NEAR DevRel" icon="users" href="https://near.org/developers">
-    Join office hours and get support
-  </Card>
-  <Card title="Documentation" icon="book" href="/protocol/basics">
-    Deep dive into NEAR Protocol concepts
-  </Card>
-</CardGroup>
-
-## Troubleshooting
+## Common commands
 
 <AccordionGroup>
-  <Accordion title="NEAR CLI not found after installation">
-    Make sure your npm global bin directory is in your PATH:
-    
+  <Accordion title="Account management">
     ```bash
-    npm config get prefix
-    ```
+    # View account balance
+    near account view-account-summary <account-id> network-config testnet
     
-    Add the bin directory to your PATH in `.bashrc`, `.zshrc`, or equivalent:
+    # Export account
+    near account export-account <account-id>
     
-    ```bash
-    export PATH="$PATH:$(npm config get prefix)/bin"
+    # Import account
+    near account import-account
     ```
   </Accordion>
-
-  <Accordion title="Faucet not working">
-    If the faucet is not responding:
-    
-    1. Try the alternative faucet at [near-faucet.io](https://near-faucet.io/)
-    2. Report the issue on [NEAR Telegram Channel](https://t.me/neardev)
-    3. Ask in the community for testnet tokens
-  </Accordion>
-
-  <Accordion title="Transaction failed">
-    Common reasons for transaction failures:
-    
-    - **Insufficient balance**: Make sure you have enough tokens for the transaction and gas fees
-    - **Invalid account**: Verify the recipient account exists
-    - **Network issues**: Check your connection and try again
-    - **Gas limit exceeded**: Complex transactions may need more gas
-  </Accordion>
-
-  <Accordion title="Wrong network (testnet vs mainnet)">
-    Always verify which network you're using:
-    
+  
+  <Accordion title="Token operations">
     ```bash
-    # For testnet
-    export NEAR_ENV=testnet
+    # Send NEAR tokens
+    near tokens <sender-account> send-near <sender> <receiver> '<amount> NEAR' network-config testnet
     
-    # For mainnet
-    export NEAR_ENV=mainnet
+    # Check balance
+    near tokens <account> view-near-balance network-config testnet
     ```
+  </Accordion>
+  
+  <Accordion title="Contract operations">
+    ```bash
+    # Deploy a contract
+    near contract deploy <account-id> use-file <path-to-wasm> network-config testnet
     
-    Add this to your shell profile to make it persistent.
+    # Call a contract method
+    near contract call-function as-transaction <contract-account> <method-name> \
+      json-args '<args>' prepaid-gas '30 TeraGas' attached-deposit '0 NEAR' \
+      network-config testnet
+    
+    # View contract data
+    near contract call-function as-read-only <contract-account> <method-name> \
+      json-args '<args>' network-config testnet
+    ```
   </Accordion>
 </AccordionGroup>
 
-## Get Help
+## Get help
 
-Need assistance? The NEAR community is here to help:
-
-- Join the [NEAR Discord](https://discord.gg/near)
-- Ask questions on [NEAR Telegram](https://t.me/neardev)
-- Post on [NEAR Dev Forum](https://gov.near.org/)
-- Attend NEAR DevRel office hours
+<CardGroup cols={2}>
+  <Card title="NEAR Discord" icon="discord" href="https://near.chat">
+    Join the community for support and discussions
+  </Card>
+  
+  <Card title="Documentation" icon="book-open" href="/protocol/basics">
+    Explore comprehensive guides and references
+  </Card>
+  
+  <Card title="GitHub Examples" icon="github" href="https://github.com/near-examples">
+    Browse example projects and code samples
+  </Card>
+  
+  <Card title="Office Hours" icon="calendar" href="https://near.org/events">
+    Attend developer office hours and workshops
+  </Card>
+</CardGroup>
