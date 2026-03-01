@@ -1,0 +1,187 @@
+---
+title: 'NEAR Intents'
+description: 'Learn how NEAR Intents enables multi-chain swaps through intent-based transactions'
+keywords: ['NEAR Intents', 'intent-based', 'DEX', 'token swaps', 'market makers', 'solvers', 'multi-chain']
+---
+
+NEAR Intents is a multichain transaction protocol where users specify what they want and let third parties compete to provide the best solution. This works for everything from token swaps to complex multi-chain operations, creating a universal marketplace across crypto services.
+
+![NEAR Intents Overview](/assets/docs/chain-abstraction/intents-overview.png)
+
+## How It Works
+
+NEAR Intents represents a paradigm shift in how users interact with blockchain networks. Instead of directly executing complex transactions across multiple chains, users simply declare what they want to achieve, and the network determines how to make it happen.
+
+<Steps>
+  <Step title="Intent Creation">
+    A user or AI agent expresses a desired outcome (e.g., "Swap Token A for Token B") and broadcasts the intent to a network of Market Makers (also called Solvers).
+  </Step>
+  <Step title="Market Makers Compete">
+    An off-chain decentralized network of Market Makers compete to fulfill the request in the most optimal way. When the network finds the best solution, it presents it as a quote to the originating user/agent for approval.
+  </Step>
+  <Step title="Intent Execution">
+    If the quote from the Market Maker is accepted, the intent is executed by calling a "Verifier" smart contract on NEAR Protocol. This contract securely verifies and settles the final transaction.
+  </Step>
+</Steps>
+
+## Key Benefits
+
+<CardGroup cols={2}>
+  <Card title="Simplified UX" icon="sparkles">
+    Users express what they want without worrying about the technical details of execution.
+  </Card>
+  <Card title="Best Execution" icon="chart-line">
+    Solvers compete to provide optimal pricing and routing across all available liquidity sources.
+  </Card>
+  <Card title="Multi-Chain Support" icon="link">
+    Execute intents across multiple blockchains without managing separate wallets or bridges.
+  </Card>
+  <Card title="AI Agent Ready" icon="robot">
+    Designed to work seamlessly with both human users and AI agents.
+  </Card>
+</CardGroup>
+
+## Example Use Cases
+
+<AccordionGroup>
+  <Accordion title="Token Swaps">
+    Instead of:
+    1. Finding the best DEX
+    2. Bridging assets between chains
+    3. Executing multiple transactions
+    4. Handling different wallet requirements
+
+    Users simply submit: **"Swap Token A for Token B at the best price"**
+    
+    The Intent Layer handles all complexity across Web2 and Web3 behind the scenes.
+  </Accordion>
+
+  <Accordion title="Cross-Chain Stablecoin Operations">
+    Express complex stablecoin strategies across multiple chains without managing the underlying infrastructure.
+  </Accordion>
+
+  <Accordion title="DeFi Programmability">
+    Enable DeFi operations for non-smart contract assets like Bitcoin through intent-based execution.
+  </Accordion>
+
+  <Accordion title="Account-Based Trading (AccountFi)">
+    Execute sophisticated trading strategies through simple intent expressions.
+  </Accordion>
+</AccordionGroup>
+
+## Developer Benefits
+
+For developers, the Intent Layer provides:
+
+- **Unified Framework**: Build cross-chain applications with a single API
+- **Liquidity Aggregation**: Access to both AI agents and traditional solvers for transaction optimization
+- **Built-in Competition**: Let solvers compete for the best execution rather than managing routing yourself
+- **Complex Use Cases**: Support beyond simple swaps, including cross-chain operations and AI agent interactions
+
+<Info>
+  NEAR Intents are designed to power both traditional DeFi operations and the emerging AI economy, creating a unified transaction framework for Web2 and Web3 interactions.
+</Info>
+
+## Video Tutorials
+
+### NEAR Intents 101
+
+An introduction to NEAR Intents core concepts and how it works.
+
+<iframe
+  width="100%"
+  height="450"
+  src="https://www.youtube.com/embed/mOGD2gzZJqE"
+  title="NEAR Intents 101"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowfullscreen
+></iframe>
+
+### NEAR Intents 102
+
+A step-by-step workshop on how to perform token swaps using NEAR Intents 1Click API.
+
+<iframe
+  width="100%"
+  height="450"
+  src="https://www.youtube.com/embed/U8ngm2hR4a4"
+  title="NEAR Intents 102"
+  frameborder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+  allowfullscreen
+></iframe>
+
+## Resources
+
+Here are some resources to get started using NEAR Intents:
+
+<CardGroup cols={2}>
+  <Card title="Official Documentation" icon="book" href="https://docs.near-intents.org">
+    Comprehensive documentation for NEAR Intents
+  </Card>
+  <Card title="Developer Support" icon="telegram" href="https://t.me/near_intents">
+    Join the developer support channel on Telegram
+  </Card>
+  <Card title="1Click API Example" icon="code" href="https://github.com/near-examples/near-intents-examples">
+    Easy integration example using 1Click API
+  </Card>
+  <Card title="Live Demo" icon="globe" href="https://near-intents.org">
+    Try the live demo application
+  </Card>
+  <Card title="Frontend Repository" icon="github" href="https://github.com/defuse-protocol/defuse-frontend">
+    Source code for near-intents.org
+  </Card>
+  <Card title="Deep Dive Blog" icon="newspaper" href="https://www.near.org/blog/unpacking-near-intents-a-deep-dive">
+    Detailed explanation of NEAR Intents concepts
+  </Card>
+</CardGroup>
+
+<Warning>
+  Currently there is no `testnet` deployment for NEAR Intents.
+</Warning>
+
+## Technical Architecture
+
+The NEAR Intents protocol consists of three main components:
+
+### Intent Verifier Contract
+
+A smart contract on NEAR that:
+- Verifies solver solutions
+- Ensures atomicity of multi-step operations
+- Settles transactions securely
+- Handles refunds if execution fails
+
+### Solver Network
+
+A decentralized network of market makers that:
+- Monitor for new intents
+- Compute optimal execution paths
+- Compete on price and execution quality
+- Submit solutions to the verifier
+
+### Client SDK
+
+Developer tools to:
+- Express intents in a standardized format
+- Receive quotes from solvers
+- Approve and execute intents
+- Track intent status
+
+## Getting Started
+
+<Steps>
+  <Step title="Explore the Documentation">
+    Visit [docs.near-intents.org](https://docs.near-intents.org) to understand the API and integration patterns.
+  </Step>
+  <Step title="Try the Demo">
+    Test token swaps on [near-intents.org](https://near-intents.org) to see the user experience.
+  </Step>
+  <Step title="Integrate the SDK">
+    Use the [1Click API examples](https://github.com/near-examples/near-intents-examples) to add NEAR Intents to your application.
+  </Step>
+  <Step title="Join the Community">
+    Connect with other developers on [Telegram](https://t.me/near_intents) for support and updates.
+  </Step>
+</Steps>

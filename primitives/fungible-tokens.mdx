@@ -1,0 +1,313 @@
+---
+title: Fungible Tokens
+description: Learn how to create, transfer, and integrate Fungible Tokens (FT) in your dApp on NEAR Protocol following NEP-141 and NEP-148 standards.
+---
+
+Fungible Tokens (FT) represent an asset on the blockchain that is interchangeable. Besides the native NEAR token, users can issue their own fungible tokens or use those that are already present in the ecosystem.
+
+<img src="/images/primitives/ft-diagram.png" alt="Fungible Tokens" />
+
+In order for a contract to be considered an FT contract, it must follow the [NEP-141](https://github.com/near/NEPs/tree/master/neps/nep-0141.md) and [NEP-148 standards](https://github.com/near/NEPs/tree/master/neps/nep-0148.md), which define the minimum interface required and expected functionality.
+
+---
+
+## Creating a New Token
+
+The simplest way to create a new Fungible Token is by interacting with a factory contract, to which you only need to provide the token metadata, and they will automatically deploy and initialize a [canonical FT contract](https://github.com/near-examples/FT).
+
+<CodeGroup>
+```bash CLI
+near call token.primitives.near create_token '{
+  "args": {
+    "owner_id": "bob.near",
+    "total_supply": "1000000000",
+    "metadata": {
+      "spec": "ft-1.0.0",
+      "name": "Test Token",
+      "symbol": "test",
+      "icon": "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7",
+      "decimals": 18
+    }
+  },
+  "account_id": "bob.near"
+}' --gas 300000000000000 --deposit 2.23483 --accountId bob.near
+```
+
+```javascript JavaScript
+import { Wallet } from '@near-wallet-selector/core';
+
+const TOKEN_FACTORY_ADDRESS = 'token.primitives.near';
+
+const args = {
+  args: {
+    owner_id: 'bob.near',
+    total_supply: '1000000000',
+    metadata: {
+      spec: 'ft-1.0.0',
+      name: 'Test Token',
+      symbol: 'test',
+      icon: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
+      decimals: 18,
+    },
+  },
+  account_id: 'bob.near',
+};
+
+await wallet.signAndSendTransaction({
+  receiverId: TOKEN_FACTORY_ADDRESS,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'create_token',
+      args,
+      gas: '300000000000000',
+      deposit: '2234830000000000000000000',
+    }
+  }]
+});
+```
+</CodeGroup>
+
+The FT you create will live in the account `<your_token_symbol>.token.primitives.near` (e.g. `test.token.primitives.near`).
+
+---
+
+## Querying Metadata
+
+You can query the FT's metadata by calling the `ft_metadata` method.
+
+<CodeGroup>
+```bash CLI
+near view token.v2.ref-finance.near ft_metadata
+```
+
+```javascript JavaScript
+const TOKEN_CONTRACT_ADDRESS = 'token.v2.ref-finance.near';
+
+const metadata = await wallet.viewMethod({
+  contractId: TOKEN_CONTRACT_ADDRESS,
+  method: 'ft_metadata',
+  args: {},
+});
+
+console.log(metadata);
+// {
+//   "spec": "ft-1.0.0",
+//   "name": "Ref Finance Token",
+//   "symbol": "REF",
+//   "icon": "data:image/svg+xml,...",
+//   "decimals": 18
+// }
+```
+</CodeGroup>
+
+---
+
+## Checking Balance
+
+To know how many tokens a user has, you need to query the `ft_balance_of` method.
+
+<CodeGroup>
+```bash CLI
+near view token.v2.ref-finance.near ft_balance_of '{"account_id": "bob.near"}'
+```
+
+```javascript JavaScript
+const TOKEN_CONTRACT_ADDRESS = 'token.v2.ref-finance.near';
+
+const balance = await wallet.viewMethod({
+  contractId: TOKEN_CONTRACT_ADDRESS,
+  method: 'ft_balance_of',
+  args: {
+    account_id: 'bob.near',
+  },
+});
+
+console.log(balance); // "3479615037675962643842"
+```
+</CodeGroup>
+
+<Note>
+Remember to account for the token's precision (decimals). Check the [metadata](#querying-metadata) to get the decimals value and display balances correctly.
+</Note>
+
+---
+
+## Registering a User
+
+In order for a user to own and transfer tokens, they need to first **register** in the contract by calling `storage_deposit` and attaching 0.00125 NEAR.
+
+<CodeGroup>
+```bash CLI
+near call token.v2.ref-finance.near storage_deposit '{"account_id": "alice.near"}' --deposit 0.00125 --accountId bob.near
+```
+
+```javascript JavaScript
+const TOKEN_CONTRACT_ADDRESS = 'token.v2.ref-finance.near';
+
+await wallet.signAndSendTransaction({
+  receiverId: TOKEN_CONTRACT_ADDRESS,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'storage_deposit',
+      args: {
+        account_id: 'alice.near',
+      },
+      gas: '30000000000000',
+      deposit: '1250000000000000000000',
+    }
+  }]
+});
+```
+</CodeGroup>
+
+<Tip>
+After a user calls `storage_deposit`, the FT will appear in their wallet.
+</Tip>
+
+---
+
+## Transferring Tokens
+
+To send FT to another account, you use the `ft_transfer` method, indicating the receiver and the amount.
+
+<CodeGroup>
+```bash CLI
+near call token.v2.ref-finance.near ft_transfer '{
+  "receiver_id": "alice.near",
+  "amount": "100000000000000000"
+}' --deposit 0.000000000000000000000001 --accountId bob.near
+```
+
+```javascript JavaScript
+const TOKEN_CONTRACT_ADDRESS = 'token.v2.ref-finance.near';
+
+await wallet.signAndSendTransaction({
+  receiverId: TOKEN_CONTRACT_ADDRESS,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'ft_transfer',
+      args: {
+        receiver_id: 'alice.near',
+        amount: '100000000000000000',
+      },
+      gas: '30000000000000',
+      deposit: '1',
+    }
+  }]
+});
+```
+
+```rust Rust Contract
+#[payable]
+pub fn send_tokens(&mut self, receiver_id: AccountId, amount: U128) -> Promise {
+  assert_eq!(
+    env::attached_deposit(),
+    1,
+    "Requires attached deposit of exactly 1 yoctoNEAR"
+  );
+
+  let promise = ext_ft_contract::ext(self.ft_contract.clone())
+    .with_attached_deposit(1)
+    .ft_transfer(receiver_id, amount, None);
+
+  promise.then(
+    Self::ext(env::current_account_id())
+      .with_static_gas(Gas(30 * TGAS))
+      .external_call_callback()
+  )
+}
+```
+</CodeGroup>
+
+---
+
+## Attaching FTs to a Call
+
+Natively, only NEAR tokens can be attached to function calls. However, the FT standard enables attaching fungible tokens by using the FT contract as an intermediary.
+
+Instead of attaching tokens directly, you ask the FT contract to do both a transfer and a function call on your behalf using `ft_transfer_call`.
+
+<CodeGroup>
+```bash CLI
+near call token.v2.ref-finance.near ft_transfer_call '{
+  "receiver_id": "v2.ref-finance.near",
+  "amount": "100000000000000000",
+  "msg": ""
+}' --gas 300000000000000 --deposit 0.000000000000000000000001 --accountId bob.near
+```
+
+```javascript JavaScript
+await wallet.signAndSendTransaction({
+  receiverId: 'token.v2.ref-finance.near',
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'ft_transfer_call',
+      args: {
+        receiver_id: 'v2.ref-finance.near',
+        amount: '100000000000000000',
+        msg: '',
+      },
+      gas: '300000000000000',
+      deposit: '1',
+    }
+  }]
+});
+```
+</CodeGroup>
+
+### How it Works
+
+1. You call `ft_transfer_call` in the FT contract passing: the receiver, a message, and the amount.
+2. The FT contract transfers the amount to the receiver.
+3. The FT contract calls `receiver.ft_on_transfer(sender, msg, amount)`.
+4. The FT contract handles errors in the `ft_resolve_transfer` callback.
+5. The FT contract returns how much of the attached amount was actually used.
+
+---
+
+## Handling Deposits
+
+If you want your contract to handle deposits in FTs, you must implement the `ft_on_transfer` method:
+
+```rust
+use near_contract_standards::fungible_token::receiver::FungibleTokenReceiver;
+
+#[near]
+impl FungibleTokenReceiver for Contract {
+  fn ft_on_transfer(
+    &mut self,
+    sender_id: AccountId,
+    amount: U128,
+    msg: String,
+  ) -> PromiseOrValue<U128> {
+    let ft_contract = env::predecessor_account_id();
+    
+    // Your logic here
+    log!("Received {} tokens from {} via {}", amount.0, sender_id, ft_contract);
+    
+    // Return unused amount (0 means all tokens were used)
+    PromiseOrValue::Value(U128(0))
+  }
+}
+```
+
+When executed, this method will know:
+- Which FT was transferred (predecessor account)
+- Who is sending the FT (sender_id parameter)
+- How many FT were transferred (amount parameter)
+- Any parameters encoded as a message (msg parameter)
+
+The method must return how many FT tokens should be refunded.
+
+---
+
+## Additional Resources
+
+- [NEP-141 Standard](https://github.com/near/NEPs/tree/master/neps/nep-0141.md)
+- [NEP-148 Standard](https://github.com/near/NEPs/tree/master/neps/nep-0148.md)
+- [FT Reference Implementation](https://github.com/near-examples/FT)
+- [FT Event Standards (NEP-300)](https://github.com/near/NEPs/blob/master/neps/nep-0300.md)

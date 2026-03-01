@@ -1,0 +1,652 @@
+---
+title: Testing Smart Contracts
+description: Learn how to write unit tests and integration tests for NEAR smart contracts using sandbox environments and testing frameworks.
+---
+
+While developing your smart contract, you'll want to test that it works as expected and securely. NEAR provides tools to help you carry out comprehensive testing.
+
+There are two main types of tests:
+
+<CardGroup cols={2}>
+  <Card title="Unit Tests" icon="microscope">
+    Test methods individually in the contract's language, executed locally
+  </Card>
+  <Card title="Integration Tests" icon="network-wired">
+    Test contract behavior in a realistic environment using Workspaces
+  </Card>
+</CardGroup>
+
+<Tip>
+We recommend implementing both types of tests to catch different types of errors and ensure your code works as intended.
+</Tip>
+
+---
+
+## Unit Tests
+
+Unit tests allow you to test individual functions within your contract in isolation.
+
+### Rust Unit Tests
+
+<Tabs>
+  <Tab title="Contract Code">
+    ```rust
+    use near_sdk::{near, env};
+
+    #[near(contract_state)]
+    pub struct Counter {
+        count: u64,
+    }
+
+    #[near]
+    impl Counter {
+        #[init]
+        pub fn new() -> Self {
+            Self { count: 0 }
+        }
+
+        pub fn increment(&mut self) {
+            self.count += 1;
+        }
+
+        pub fn get_count(&self) -> u64 {
+            self.count
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Test Code">
+    ```rust
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[test]
+        fn test_increment() {
+            let mut contract = Counter::new();
+            assert_eq!(contract.get_count(), 0);
+            
+            contract.increment();
+            assert_eq!(contract.get_count(), 1);
+            
+            contract.increment();
+            assert_eq!(contract.get_count(), 2);
+        }
+
+        #[test]
+        fn test_default() {
+            let contract = Counter::new();
+            assert_eq!(contract.get_count(), 0);
+        }
+    }
+    ```
+
+    Run tests with:
+    ```bash
+    cargo test
+    ```
+  </Tab>
+</Tabs>
+
+### JavaScript Unit Tests
+
+<Tabs>
+  <Tab title="Contract Code">
+    ```javascript
+    import { NearBindgen, call, view } from 'near-sdk-js';
+
+    @NearBindgen({})
+    class Counter {
+      count = 0;
+
+      @call({})
+      increment() {
+        this.count += 1;
+      }
+
+      @view({})
+      get_count() {
+        return this.count;
+      }
+    }
+    ```
+  </Tab>
+  <Tab title="Test Code">
+    ```javascript
+    import { Counter } from '../src/contract';
+
+    describe('Counter', () => {
+      let contract;
+
+      beforeEach(() => {
+        contract = new Counter();
+      });
+
+      test('starts at zero', () => {
+        expect(contract.get_count()).toBe(0);
+      });
+
+      test('increments', () => {
+        contract.increment();
+        expect(contract.get_count()).toBe(1);
+        
+        contract.increment();
+        expect(contract.get_count()).toBe(2);
+      });
+    });
+    ```
+
+    Run tests with:
+    ```bash
+    npm test
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Integration Tests
+
+Integration tests deploy your contract in a sandbox environment or testnet, allowing you to test realistic interactions.
+
+### NEAR Workspaces
+
+**Workspaces** is a testing framework that enables:
+
+- Creating test accounts
+- Deploying contracts to sandbox
+- Simulating user interactions
+- Testing cross-contract calls
+- Time travel (fast-forwarding blockchain time)
+- State manipulation
+
+Available in [Rust](https://github.com/near/workspaces-rs) and [TypeScript](https://github.com/near/workspaces-js).
+
+<Tip>
+By default, Workspaces runs a local sandbox. Tests are fast and don't require testnet connectivity.
+</Tip>
+
+---
+
+## Setting Up Workspaces
+
+<Tabs>
+  <Tab title="Rust">
+    Add to `Cargo.toml`:
+    ```toml
+    [dev-dependencies]
+    near-workspaces = "0.10"
+    tokio = { version = "1", features = ["full"] }
+    serde_json = "1"
+    ```
+
+    Create test file `tests/test_basics.rs`:
+    ```rust
+    use near_workspaces::{Account, Contract};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_contract() -> Result<(), Box<dyn std::error::Error>> {
+        let worker = near_workspaces::sandbox().await?;
+        let wasm = near_workspaces::compile_project("./").await?;
+
+        let contract = worker.dev_deploy(&wasm).await?;
+        let account = worker.dev_create_account().await?;
+
+        // Test your contract
+        Ok(())
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    Install dependencies:
+    ```bash
+    npm install --save-dev near-workspaces ava
+    ```
+
+    Create test file `__tests__/main.test.js`:
+    ```javascript
+    import { Worker } from 'near-workspaces';
+    import test from 'ava';
+
+    test.beforeEach(async (t) => {
+      const worker = await Worker.init();
+      const root = worker.rootAccount;
+
+      const contract = await root.createSubAccount('contract');
+      await contract.deploy('./build/contract.wasm');
+
+      t.context = { worker, contract, root };
+    });
+
+    test.afterEach.always(async (t) => {
+      await t.context.worker.tearDown();
+    });
+
+    test('contract works', async (t) => {
+      const { contract } = t.context;
+      // Test your contract
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Common Testing Patterns
+
+### Deploying and Initializing
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[tokio::test]
+    async fn test_init() -> Result<(), Box<dyn std::error::Error>> {
+        let worker = near_workspaces::sandbox().await?;
+        let wasm = near_workspaces::compile_project("./").await?;
+
+        // Deploy contract
+        let contract = worker.dev_deploy(&wasm).await?;
+
+        // Initialize
+        contract.call("init")
+            .args_json(json!({
+                "owner": contract.id()
+            }))
+            .transact()
+            .await?;
+
+        Ok(())
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    test('deploy and initialize', async (t) => {
+      const { contract } = t.context;
+
+      await contract.call('init', {
+        owner: contract.accountId,
+      });
+
+      const owner = await contract.view('get_owner', {});
+      t.is(owner, contract.accountId);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Calling Functions
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    // Call a change method
+    let result = account
+        .call(contract.id(), "increment")
+        .args_json(json!({}))
+        .transact()
+        .await?;
+
+    assert!(result.is_success());
+
+    // View method
+    let count: u64 = contract
+        .view("get_count")
+        .args_json(json!({}))
+        .await?
+        .json()?;
+
+    assert_eq!(count, 1);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Call a change method
+    await account.call(contract, 'increment', {});
+
+    // View method
+    const count = await contract.view('get_count', {});
+    t.is(count, 1);
+    ```
+  </Tab>
+</Tabs>
+
+### Testing with Deposits
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::NearToken;
+
+    let result = account
+        .call(contract.id(), "donate")
+        .args_json(json!({}))
+        .deposit(NearToken::from_near(5))
+        .transact()
+        .await?;
+
+    assert!(result.is_success());
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NEAR } from 'near-workspaces';
+
+    await account.call(
+      contract,
+      'donate',
+      {},
+      { attachedDeposit: NEAR.parse('5 N') }
+    );
+    ```
+  </Tab>
+</Tabs>
+
+### Creating Test Accounts
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    // Create a development account
+    let account = worker.dev_create_account().await?;
+
+    // Create a subaccount
+    let alice = contract
+        .as_account()
+        .create_subaccount("alice")
+        .initial_balance(NearToken::from_near(10))
+        .transact()
+        .await?
+        .into_result()?;
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Create a development account
+    const account = await worker.rootAccount.createSubAccount('test-account');
+
+    // Create subaccount with initial balance
+    const alice = await root.createSubAccount('alice', {
+      initialBalance: NEAR.parse('10 N').toString(),
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Advanced Testing Features
+
+### Time Travel
+
+Fast-forward the blockchain to test time-dependent functionality:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    // Fast forward 100 blocks
+    worker.fast_forward(100).await?;
+
+    // Check auction has ended
+    let ended: bool = contract
+        .view("is_auction_ended")
+        .args_json(json!({}))
+        .await?
+        .json()?;
+
+    assert!(ended);
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Fast forward 100 blocks
+    await worker.provider.fastForward(100);
+
+    // Check auction has ended
+    const ended = await contract.view('is_auction_ended', {});
+    t.true(ended);
+    ```
+  </Tab>
+</Tabs>
+
+### Patch State
+
+Modify contract state directly (sandbox only):
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_workspaces::network::Sandbox;
+
+    let mut contract_state = contract.view_state().await?;
+    // Modify state
+    contract_state.insert("key".as_bytes().to_vec(), "value".as_bytes().to_vec());
+
+    worker.patch_state(contract.id(), &contract_state).await?;
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    await contract.patchState({
+      key: 'value',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Checking Logs
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    let result = account
+        .call(contract.id(), "log_message")
+        .transact()
+        .await?;
+
+    println!("Logs: {:?}", result.logs());
+    assert!(result.logs().contains(&"Hello World".to_string()));
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    const result = await account.callRaw(contract, 'log_message', {});
+    
+    console.log('Logs:', result.logs);
+    t.true(result.logs.includes('Hello World'));
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Testing on Testnet
+
+Run tests against actual testnet:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[tokio::test]
+    async fn test_on_testnet() -> Result<(), Box<dyn std::error::Error>> {
+        let worker = near_workspaces::testnet().await?;
+        
+        // Load account from credentials
+        let account = worker
+            .import_account("your-account.testnet")
+            .await?;
+
+        // Deploy and test on testnet
+        Ok(())
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Set environment variable
+    // NEAR_WORKSPACES_NETWORK=testnet npm test
+
+    test('testnet integration', async (t) => {
+      const worker = await Worker.init({
+        network: 'testnet',
+        testnetMasterAccountId: 'your-account.testnet',
+      });
+
+      // Run tests on testnet
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Example: Testing Hello NEAR
+
+Complete example testing the Hello NEAR contract:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_workspaces::{Account, Contract};
+    use serde_json::json;
+
+    #[tokio::test]
+    async fn test_hello_near() -> Result<(), Box<dyn std::error::Error>> {
+        let worker = near_workspaces::sandbox().await?;
+        let wasm = near_workspaces::compile_project("./").await?;
+
+        let contract = worker.dev_deploy(&wasm).await?;
+        let alice = worker.dev_create_account().await?;
+
+        // Test default greeting
+        let greeting: String = contract
+            .view("get_greeting")
+            .await?
+            .json()?;
+        assert_eq!(greeting, "Hello");
+
+        // Change greeting
+        alice
+            .call(contract.id(), "set_greeting")
+            .args_json(json!({ "greeting": "Howdy" }))
+            .transact()
+            .await?;
+
+        // Verify change
+        let greeting: String = contract
+            .view("get_greeting")
+            .await?
+            .json()?;
+        assert_eq!(greeting, "Howdy");
+
+        Ok(())
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { Worker } from 'near-workspaces';
+    import test from 'ava';
+
+    test('Hello NEAR contract', async (t) => {
+      const worker = await Worker.init();
+      const root = worker.rootAccount;
+
+      // Deploy contract
+      const contract = await root.createSubAccount('hello');
+      await contract.deploy('./build/hello.wasm');
+
+      // Test default greeting
+      let greeting = await contract.view('get_greeting', {});
+      t.is(greeting, 'Hello');
+
+      // Change greeting
+      await root.call(contract, 'set_greeting', {
+        greeting: 'Howdy',
+      });
+
+      // Verify change
+      greeting = await contract.view('get_greeting', {});
+      t.is(greeting, 'Howdy');
+
+      await worker.tearDown();
+    });
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Test Edge Cases">
+    Always test boundary conditions:
+    - Empty inputs
+    - Maximum values
+    - Negative scenarios
+    - Unauthorized access
+  </Accordion>
+
+  <Accordion title="Test State Changes">
+    Verify that state changes persist correctly:
+    - Check values before and after
+    - Test multiple sequential operations
+    - Verify rollback behavior
+  </Accordion>
+
+  <Accordion title="Test Cross-Contract Calls">
+    Test contract interactions:
+    - Successful calls
+    - Failed calls and callbacks
+    - Gas handling
+    - Deposit handling
+  </Accordion>
+
+  <Accordion title="Test Error Conditions">
+    Ensure errors are handled properly:
+    - Invalid arguments
+    - Insufficient funds
+    - Unauthorized calls
+    - State validation
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Workspaces Rust" icon="rust" href="https://github.com/near/workspaces-rs">
+    Rust testing framework documentation
+  </Card>
+  <Card title="Workspaces JS" icon="js" href="https://github.com/near/workspaces-js">
+    JavaScript testing framework documentation
+  </Card>
+  <Card title="Example Tests" icon="code" href="https://github.com/near-examples">
+    View example projects with tests
+  </Card>
+  <Card title="Security Testing" icon="shield" href="/smart-contracts/security">
+    Security testing best practices
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Security" icon="shield" href="/smart-contracts/security">
+    Learn security best practices
+  </Card>
+  <Card title="Deploy" icon="rocket" href="/smart-contracts/deploy">
+    Deploy your tested contract
+  </Card>
+  <Card title="Upgrade" icon="arrow-up" href="/smart-contracts/upgrade">
+    Learn about contract updates
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/near-examples">
+    Explore more examples
+  </Card>
+</CardGroup>

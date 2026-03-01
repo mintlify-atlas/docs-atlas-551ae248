@@ -1,0 +1,93 @@
+---
+title: Transactions
+description: Learn how users interact with NEAR through transactions composed of actions, signed with private keys, and processed by the network with deterministic gas costs
+---
+
+Users interact with NEAR by creating transactions. Specifically, users use their account's [private keys](/protocol/access-keys) to sign transactions, which are then broadcasted and processed by the network.
+
+<img src="/assets/docs/welcome-pages/data-lake.png" alt="Transactions" />
+
+A transaction is composed of one or more [`Actions`](/protocol/transaction-anatomy), and each action costs a deterministic amount of [gas units](/protocol/gas). These gas units are translated into a cost in NEAR tokens, which the user must pay for the transaction to be processed.
+
+<Tip>
+  You can use an [Explorer](https://nearblocks.io/) to inspect transactions in the NEAR network
+</Tip>
+
+---
+
+## Transaction Lifecycle
+
+Transactions in NEAR go through several stages from creation to finality:
+
+<Steps>
+  <Step title="Transaction Created">
+    User creates and signs a transaction with their private key
+  </Step>
+  <Step title="Broadcast">
+    Transaction is broadcast to the network
+  </Step>
+  <Step title="Validation">
+    Network validates the transaction structure and signature
+  </Step>
+  <Step title="Conversion to Receipt">
+    Transaction is converted into a Receipt containing all actions
+  </Step>
+  <Step title="Execution">
+    Receipt is executed and actions are performed
+  </Step>
+  <Step title="Finality">
+    Transaction reaches finality (typically 1-3 seconds)
+  </Step>
+</Steps>
+
+<Card title="Learn More" icon="arrow-right" href="/protocol/transaction-anatomy">
+  Explore the detailed anatomy of a transaction
+</Card>
+
+---
+
+## Transaction Components
+
+Each transaction contains:
+
+<Tabs>
+  <Tab title="Required Fields">
+    - **Signer**: The account that signs the transaction
+    - **Receiver**: The account on which to perform the actions
+    - **Actions**: The set of actions to be performed
+  </Tab>
+  <Tab title="Validation Fields">
+    - **PublicKey**: The public key used to sign the transaction
+    - **Nonce**: A number incremented for each transaction
+    - **BlockHash**: Hash of a recent block for time-validity
+  </Tab>
+</Tabs>
+
+---
+
+## Transaction Status
+
+As transactions are processed, they receive a status:
+
+- **Success**: All actions executed successfully
+- **Failed**: An action failed and was rolled back
+- **Unknown**: Receipt is not known by the network
+
+<Info>
+  A transaction is considered **final** when all its receipts are processed. This typically takes 1-3 seconds.
+</Info>
+
+---
+
+## Gas and Fees
+
+Every transaction requires gas to be processed:
+
+- Gas is calculated in **deterministic gas units**
+- Gas units are converted to NEAR tokens using the network's **gas price**
+- Users pay the fee upfront when the transaction is submitted
+- Unused gas is refunded (minus a small refund fee)
+
+<Card title="Learn More" icon="arrow-right" href="/protocol/gas">
+  Understand how gas works in NEAR
+</Card>

@@ -1,0 +1,419 @@
+---
+title: 'Data APIs'
+description: 'Explore community-built APIs for accessing NEAR Protocol on-chain data'
+keywords: ['NEAR APIs', 'blockchain API', 'FastNEAR', 'NearBlocks', 'Pikespeak', 'The Graph', 'SubQuery', 'on-chain data']
+---
+
+If you are building a decentralized application, chances are that you will need to query on-chain data. Since building a full indexer is not always feasible, the community has created a set of APIs that you can use to query data from the NEAR blockchain.
+
+These APIs provide a simple way to access on-chain data without having to run your own indexer or node. They are designed to be easy to use and provide a wide range of functionality, from querying account balances to exploring transactions and blocks.
+
+---
+
+## FastNEAR API
+
+The [FastNEAR API](https://github.com/fastnear/fastnear-api-server-rs?tab=readme-ov-file#api-v1) allows to easily query the NEAR blockchain to get an account's assets, map keys into account IDs, explore a block's transactions, etc.
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Account Assets" icon="wallet">
+    Query all assets of an account (including fungible and non-fungible tokens)
+  </Card>
+  <Card title="Latest Blocks" icon="cube">
+    Query the last block produced
+  </Card>
+  <Card title="Key Mapping" icon="key">
+    Map Public Key to Account ID or Full Access Public Key to Account ID
+  </Card>
+  <Card title="Staking Info" icon="coins">
+    Know a user's staking pools (validators)
+  </Card>
+  <Card title="Token Holders" icon="users">
+    Query the top holders of a token
+  </Card>
+</CardGroup>
+
+### Examples
+
+<Tabs>
+  <Tab title="Fungible Tokens">
+    Query all fungible tokens owned by an account:
+
+    ```bash
+    curl https://api.fastnear.com/v1/account/root.near/ft
+    ```
+
+    **Response:**
+    ```json
+    {
+      "tokens": [
+        {
+          "contract_id": "usdt.tether-token.near",
+          "balance": "1000000",
+          "metadata": {
+            "name": "Tether USD",
+            "symbol": "USDT",
+            "decimals": 6
+          }
+        }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="Non-Fungible Tokens">
+    Query all NFTs owned by an account:
+
+    ```bash
+    curl https://api.fastnear.com/v1/account/root.near/nft
+    ```
+
+    **Response:**
+    ```json
+    {
+      "nfts": [
+        {
+          "contract_id": "paras-token-v2.near",
+          "token_id": "12345",
+          "metadata": {
+            "title": "NFT Title",
+            "media": "https://..."
+          }
+        }
+      ]
+    }
+    ```
+  </Tab>
+
+  <Tab title="All Assets">
+    Query all assets (FTs, NFTs, and account info):
+
+    ```bash
+    curl https://api.fastnear.com/v1/account/root.near/full
+    ```
+
+    Returns comprehensive account information including balance, storage usage, tokens, and NFTs.
+  </Tab>
+</Tabs>
+
+<Card title="FastNEAR Documentation" icon="book" href="https://github.com/fastnear/fastnear-api-server-rs?tab=readme-ov-file#api-v1">
+  View complete API documentation and more examples
+</Card>
+
+---
+
+## NearBlocks API
+
+[NearBlocks API](https://api.nearblocks.io/api-docs/) provides an endpoint to query actions that happened on a NEAR account.
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Account Balance" icon="wallet">
+    Query an account's current balance
+  </Card>
+  <Card title="Contract Calls" icon="code">
+    Query all function calls to a specific contract
+  </Card>
+  <Card title="Supply Metrics" icon="chart-line">
+    Get total NEAR supply and circulating supply
+  </Card>
+  <Card title="Transaction Count" icon="hashtag">
+    Query the number of total transactions on NEAR
+  </Card>
+</CardGroup>
+
+### Examples
+
+<Tabs>
+  <Tab title="Transaction Queries">
+    Get all transactions where somebody called `create_drop` on Keypom:
+
+    ```bash
+    curl -X GET "https://api.nearblocks.io/v1/account/v2.keypom.near/txns?method=create_drop"
+    ```
+
+    Filter by specific sender:
+
+    ```bash
+    curl -X GET "https://api.nearblocks.io/v1/account/v2.keypom.near/txns?method=create_drop&from=gagdiez.near"
+    ```
+  </Tab>
+
+  <Tab title="Account Info">
+    Get account balance and information:
+
+    ```bash
+    curl -X GET "https://api.nearblocks.io/v1/account/root.near"
+    ```
+
+    **Response:**
+    ```json
+    {
+      "account_id": "root.near",
+      "amount": "1000000000000000000000000",
+      "storage_usage": 182,
+      "block_height": 123456789
+    }
+    ```
+  </Tab>
+
+  <Tab title="Network Stats">
+    Get NEAR network statistics:
+
+    ```bash
+    curl -X GET "https://api.nearblocks.io/v1/stats"
+    ```
+
+    Returns total supply, circulating supply, transaction count, and more.
+  </Tab>
+</Tabs>
+
+<Card title="NearBlocks API Documentation" icon="book" href="https://api.nearblocks.io/api-docs/">
+  Explore the complete API reference and interactive documentation
+</Card>
+
+---
+
+## Pikespeak API
+
+The [Pikespeak API](https://doc.pikespeak.ai/) allows you to fetch blockchain events and aggregated analytics on wallets, validators, delegators, money transfers, dApps activity, and more.
+
+### Use Cases
+
+<CardGroup cols={2}>
+  <Card title="Account Balances" icon="wallet">
+    Query current and historical account balances
+  </Card>
+  <Card title="Active Wallets" icon="fire">
+    Query the most active wallets by transaction count
+  </Card>
+  <Card title="Historic Events" icon="clock">
+    Query historic account events and activities
+  </Card>
+  <Card title="Validator Stats" icon="server">
+    Get validator and delegator analytics
+  </Card>
+</CardGroup>
+
+<Warning>
+  To access the Pikespeak API you'll need to [register and create an account](https://pikespeak.ai/plans). Once you're registered, under the [`My Account`](https://pikespeak.ai/myaccount) page you can get your API key.
+</Warning>
+
+### Examples
+
+<Tabs>
+  <Tab title="Account Balance">
+    Check the account balance for `root.near`:
+
+    ```bash
+    curl -X GET https://api.pikespeak.ai/account/balance/root.near \
+      -H "accept: application/json" \
+      -H "x-api-key: YOUR-PIKESPEAK-API-KEY"
+    ```
+
+    **Response:**
+    ```json
+    {
+      "account_id": "root.near",
+      "balance": "1000000000000000000000000",
+      "balance_near": "1000"
+    }
+    ```
+  </Tab>
+
+  <Tab title="Hot Wallets">
+    Get most active NEAR wallet senders:
+
+    ```bash
+    curl -X GET https://api.pikespeak.ai/hot-wallets/near \
+      -H "accept: application/json" \
+      -H "x-api-key: YOUR-PIKESPEAK-API-KEY"
+    ```
+
+    Returns list of most active wallets sorted by transaction volume.
+  </Tab>
+
+  <Tab title="Historic Events">
+    Get historic account events for `keypom.near`:
+
+    ```bash
+    curl -X GET https://api.pikespeak.ai/event-historic/keypom.near \
+      -H "accept: application/json" \
+      -H "x-api-key: YOUR-PIKESPEAK-API-KEY"
+    ```
+
+    Returns historical events including transfers, function calls, and state changes.
+  </Tab>
+</Tabs>
+
+<Card title="Pikespeak Documentation" icon="book" href="https://doc.pikespeak.ai/">
+  View full API documentation and get your API key
+</Card>
+
+---
+
+## The Graph
+
+[The Graph](https://thegraph.com/docs/en/cookbook/near/) gives developers tools to process blockchain events and make the resulting data easily available via a GraphQL API, known individually as a subgraph.
+
+<Info>
+  [Graph Node](https://github.com/graphprotocol/graph-node) is now able to process NEAR events, which means that NEAR developers can now build subgraphs to index their smart contracts.
+</Info>
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="GraphQL API" icon="diagram-project">
+    Query blockchain data using flexible GraphQL queries
+  </Card>
+  <Card title="Custom Indexing" icon="filter">
+    Define custom data schemas and indexing logic
+  </Card>
+  <Card title="Decentralized" icon="network-wired">
+    Run on The Graph's decentralized network
+  </Card>
+  <Card title="Multi-Chain" icon="globe">
+    Index data across multiple blockchain networks
+  </Card>
+</CardGroup>
+
+### How It Works
+
+<Steps>
+  <Step title="Define your schema">
+    Create a GraphQL schema that defines the data you want to index.
+  </Step>
+  <Step title="Write mapping logic">
+    Write TypeScript code to transform blockchain events into your schema.
+  </Step>
+  <Step title="Deploy your subgraph">
+    Deploy to The Graph's hosted service or decentralized network.
+  </Step>
+  <Step title="Query with GraphQL">
+    Use GraphQL to query your indexed data from your application.
+  </Step>
+</Steps>
+
+<Card title="The Graph NEAR Cookbook" icon="book" href="https://thegraph.com/docs/en/cookbook/near/">
+  Learn how to build NEAR subgraphs with The Graph
+</Card>
+
+---
+
+## SubQuery
+
+[SubQuery](https://academy.subquery.network/quickstart/quickstart_chains/near.html) is a fast, flexible, and reliable open-source data indexer that provides you with custom APIs for your web3 project across NEAR and many other chains.
+
+### Key Features
+
+<CardGroup cols={2}>
+  <Card title="Fast Indexing" icon="bolt">
+    High-performance indexing for real-time data access
+  </Card>
+  <Card title="Custom APIs" icon="code">
+    Build custom GraphQL APIs tailored to your needs
+  </Card>
+  <Card title="Multi-Chain" icon="globe">
+    Index data from NEAR and other blockchain networks
+  </Card>
+  <Card title="Open Source" icon="code-branch">
+    Fully open-source and community-driven
+  </Card>
+</CardGroup>
+
+### How It Works
+
+<Steps>
+  <Step title="Install SubQuery CLI">
+    Install the SubQuery CLI tool to start building your indexer.
+  </Step>
+  <Step title="Initialize project">
+    Create a new SubQuery project for NEAR Protocol.
+  </Step>
+  <Step title="Define mappings">
+    Write TypeScript mapping functions to process blockchain data.
+  </Step>
+  <Step title="Deploy and query">
+    Deploy your SubQuery project and query via GraphQL.
+  </Step>
+</Steps>
+
+<Card title="SubQuery NEAR Guide" icon="book" href="https://academy.subquery.network/quickstart/quickstart_chains/near.html">
+  Get started with SubQuery on NEAR Protocol
+</Card>
+
+---
+
+## Choosing the Right API
+
+<Tabs>
+  <Tab title="Quick Queries">
+    **Best for:** Simple queries, prototyping, quick integrations
+
+    **Recommended APIs:**
+    - **FastNEAR** - Account assets, token balances
+    - **NearBlocks** - Transaction history, account info
+    - **Pikespeak** - Analytics and aggregated data
+
+    <Tip>
+      Start with these APIs if you need quick access to common data without setting up infrastructure.
+    </Tip>
+  </Tab>
+
+  <Tab title="Custom Indexing">
+    **Best for:** Complex queries, custom data structures, specific business logic
+
+    **Recommended Solutions:**
+    - **The Graph** - Decentralized indexing with GraphQL
+    - **SubQuery** - Fast, flexible custom indexers
+    - **NEAR Lake** - Full control with custom code
+
+    <Tip>
+      Use these solutions when you need to process data in specific ways or have unique indexing requirements.
+    </Tip>
+  </Tab>
+
+  <Tab title="Analytics">
+    **Best for:** Data analysis, business intelligence, research
+
+    **Recommended Solutions:**
+    - **BigQuery** - SQL-based analytics on historical data
+    - **Pikespeak** - Aggregated analytics and metrics
+    - **Custom Indexer** - Build with NEAR Lake Framework
+
+    <Tip>
+      Use BigQuery for ad-hoc analysis and Pikespeak for pre-computed analytics.
+    </Tip>
+  </Tab>
+</Tabs>
+
+---
+
+## Comparison Table
+
+| Feature | FastNEAR | NearBlocks | Pikespeak | The Graph | SubQuery |
+|---------|----------|------------|-----------|-----------|----------|
+| **Setup Required** | None | None | API Key | Subgraph | Indexer |
+| **Query Language** | REST | REST | REST | GraphQL | GraphQL |
+| **Real-time Data** | Yes | Yes | Yes | Yes | Yes |
+| **Custom Logic** | No | No | No | Yes | Yes |
+| **Cost** | Free | Free | Paid Plans | Free/Paid | Free/Paid |
+| **Best For** | Assets | Transactions | Analytics | Custom | Custom |
+
+---
+
+## Getting Help
+
+<CardGroup cols={3}>
+  <Card title="NEAR Discord" icon="discord" href="https://near.chat">
+    Join the community for support and discussions
+  </Card>
+  <Card title="Build an Indexer" icon="hammer" href="/data-infrastructure/near-lake-framework">
+    Learn to build your own indexer with NEAR Lake
+  </Card>
+  <Card title="BigQuery Dataset" icon="database" href="/data-infrastructure/big-query">
+    Query historical data with SQL
+  </Card>
+</CardGroup>

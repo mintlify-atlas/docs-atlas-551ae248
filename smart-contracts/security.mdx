@@ -1,0 +1,580 @@
+---
+title: Smart Contract Security
+description: Learn security best practices for NEAR smart contracts, including common vulnerabilities and how to build secure decentralized applications.
+---
+
+Security is critical when building smart contracts. This guide covers essential security concepts and best practices to keep your dApp safe.
+
+<Warning>
+**Smart contracts handle real money!**
+
+Always prioritize security in your development process. A vulnerability can lead to significant financial losses.
+</Warning>
+
+---
+
+## Security Checklist
+
+Before deploying your contract, review this checklist:
+
+### Anatomy & Functions
+
+<Checklist>
+  <Check>All private methods are decorated as `private`</Check>
+  <Check>Initialization functions are marked as `private`</Check>
+  <Check>Callback functions are marked as `private`</Check>
+  <Check>Public functions validate all inputs</Check>
+</Checklist>
+
+### Environment & Context
+
+<Checklist>
+  <Check>`predecessor` and `signer` are used correctly throughout</Check>
+  <Check>Access control checks use `predecessor_account_id`</Check>
+  <Check>Time-dependent logic uses `block_timestamp` correctly</Check>
+</Checklist>
+
+### Storage & State
+
+<Checklist>
+  <Check>State growth is covered by sufficient balance</Check>
+  <Check>All collections have unique IDs</Check>
+  <Check>Overflow and underflow are checked (use `overflow-checks = true` in Cargo.toml)</Check>
+  <Check>State changes are atomic and consistent</Check>
+</Checklist>
+
+### Actions & Transfers
+
+<Checklist>
+  <Check>Enough balance remains to cover storage costs after transfers</Check>
+  <Check>User funds are deducted **before** sending them back</Check>
+  <Check>Transfer amounts are validated</Check>
+  <Check>Failed transfers are handled gracefully</Check>
+</Checklist>
+
+### Cross-Contract Calls
+
+<Checklist>
+  <Check>All cross-contract calls have callbacks</Check>
+  <Check>All callbacks check for errors and rollback state if necessary</Check>
+  <Check>Callbacks return money to predecessor if needed</Check>
+  <Check>Callbacks are free of `panic!`</Check>
+  <Check>Sufficient GAS is provided for callbacks</Check>
+  <Check>Contract isn't left in exploitable state between call and callback</Check>
+</Checklist>
+
+---
+
+## Common Vulnerabilities
+
+### 1. Callback Security
+
+Cross-contract calls are asynchronous. The contract state can change between the call and callback.
+
+<Tabs>
+  <Tab title="Vulnerable">
+    ```rust
+    #[near]
+    impl Contract {
+        #[payable]
+        pub fn buy_item(&mut self, item_id: u64) -> Promise {
+            let buyer = env::predecessor_account_id();
+            let price = self.get_item_price(item_id);
+            let deposit = env::attached_deposit();
+            
+            assert!(deposit >= price, "Insufficient deposit");
+            
+            // ❌ VULNERABLE: Item marked as sold immediately
+            self.mark_as_sold(item_id, buyer.clone());
+            
+            // External call to transfer NFT
+            ext_nft::ext(self.nft_contract.clone())
+                .transfer(buyer.clone(), item_id)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .buy_callback(item_id, buyer)
+                )
+        }
+
+        #[private]
+        pub fn buy_callback(&mut self, item_id: u64, buyer: AccountId) {
+            // If NFT transfer fails, item is still marked as sold!
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Secure">
+    ```rust
+    #[near]
+    impl Contract {
+        #[payable]
+        pub fn buy_item(&mut self, item_id: u64) -> Promise {
+            let buyer = env::predecessor_account_id();
+            let price = self.get_item_price(item_id);
+            let deposit = env::attached_deposit();
+            
+            assert!(deposit >= price, "Insufficient deposit");
+            assert!(self.is_available(item_id), "Item not available");
+            
+            // ✅ Store pending sale, don't mark as sold yet
+            self.pending_sales.insert(item_id, PendingSale {
+                buyer: buyer.clone(),
+                amount: deposit,
+            });
+            
+            ext_nft::ext(self.nft_contract.clone())
+                .transfer(buyer.clone(), item_id)
+                .then(
+                    Self::ext(env::current_account_id())
+                        .buy_callback(item_id, buyer, deposit)
+                )
+        }
+
+        #[private]
+        pub fn buy_callback(
+            &mut self,
+            item_id: u64,
+            buyer: AccountId,
+            deposit: Balance,
+            #[callback_result] result: Result<(), PromiseError>
+        ) {
+            // Remove pending sale
+            self.pending_sales.remove(&item_id);
+            
+            match result {
+                Ok(_) => {
+                    // ✅ Only mark as sold if transfer succeeded
+                    self.mark_as_sold(item_id, buyer);
+                },
+                Err(_) => {
+                    // ✅ Refund on failure
+                    Promise::new(buyer).transfer(NearToken::from_yoctonear(deposit));
+                }
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+**Key Points:**
+- Don't finalize state changes before callbacks execute
+- Always check callback results
+- Refund users if external calls fail
+- Mark callbacks as `private`
+</Warning>
+
+---
+
+### 2. Reentrancy Attacks
+
+Although less common in NEAR than other blockchains, reentrancy is still possible through cross-contract calls.
+
+<Tabs>
+  <Tab title="Vulnerable">
+    ```rust
+    #[near]
+    impl Contract {
+        pub fn withdraw(&mut self) -> Promise {
+            let caller = env::predecessor_account_id();
+            let amount = self.balances.get(&caller).unwrap_or(0);
+            
+            assert!(amount > 0, "No balance");
+            
+            // ❌ VULNERABLE: Balance cleared after transfer
+            Promise::new(caller.clone())
+                .transfer(NearToken::from_yoctonear(amount))
+                .then(
+                    Self::ext(env::current_account_id())
+                        .withdraw_callback(caller)
+                )
+        }
+
+        #[private]
+        pub fn withdraw_callback(&mut self, caller: AccountId) {
+            // Balance cleared here - too late!
+            self.balances.insert(caller, 0);
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="Secure">
+    ```rust
+    #[near]
+    impl Contract {
+        pub fn withdraw(&mut self) -> Promise {
+            let caller = env::predecessor_account_id();
+            let amount = self.balances.get(&caller).unwrap_or(0);
+            
+            assert!(amount > 0, "No balance");
+            
+            // ✅ SECURE: Clear balance BEFORE transfer
+            self.balances.insert(caller.clone(), 0);
+            
+            Promise::new(caller.clone())
+                .transfer(NearToken::from_yoctonear(amount))
+                .then(
+                    Self::ext(env::current_account_id())
+                        .withdraw_callback(caller, amount)
+                )
+        }
+
+        #[private]
+        pub fn withdraw_callback(
+            &mut self,
+            caller: AccountId,
+            amount: Balance,
+            #[callback_result] result: Result<(), PromiseError>
+        ) {
+            if result.is_err() {
+                // ✅ Restore balance if transfer failed
+                let current = self.balances.get(&caller).unwrap_or(0);
+                self.balances.insert(caller, current + amount);
+            }
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+**Best Practice:** Always update state **before** making external calls or transfers ("checks-effects-interactions" pattern).
+</Tip>
+
+---
+
+### 3. Front-Running
+
+Transactions are visible before execution. Attackers can see pending transactions and submit their own with higher gas.
+
+**Vulnerable Scenarios:**
+- DEX trades without slippage protection
+- Auctions without commit-reveal schemes
+- First-come-first-served mechanisms
+
+<Tabs>
+  <Tab title="Vulnerable">
+    ```rust
+    #[payable]
+    pub fn buy_token(&mut self) {
+        let amount = env::attached_deposit();
+        // ❌ Uses current price - can be front-run
+        let tokens = amount / self.token_price;
+        self.mint_tokens(env::predecessor_account_id(), tokens);
+    }
+    ```
+  </Tab>
+  <Tab title="Secure">
+    ```rust
+    #[payable]
+    pub fn buy_token(&mut self, min_tokens: u128, max_price: u128) {
+        let amount = env::attached_deposit();
+        let current_price = self.token_price;
+        
+        // ✅ User specifies acceptable parameters
+        assert!(current_price <= max_price, "Price too high");
+        
+        let tokens = amount / current_price;
+        assert!(tokens >= min_tokens, "Insufficient tokens");
+        
+        self.mint_tokens(env::predecessor_account_id(), tokens);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 4. Storage Staking Attacks
+
+Attackers can drain contract balance by forcing it to pay for storage.
+
+<Tabs>
+  <Tab title="Vulnerable">
+    ```rust
+    pub fn register_user(&mut self, user_id: AccountId) {
+        // ❌ Anyone can register any user, draining contract balance
+        self.users.insert(user_id, UserData::default());
+    }
+    ```
+  </Tab>
+  <Tab title="Secure">
+    ```rust
+    #[payable]
+    pub fn register_user(&mut self) {
+        let user_id = env::predecessor_account_id();
+        let deposit = env::attached_deposit();
+        
+        // ✅ Require deposit to cover storage
+        let required_storage = 1000; // bytes
+        let required_deposit = required_storage as u128 * env::storage_byte_cost();
+        assert!(deposit >= required_deposit, "Insufficient deposit for storage");
+        
+        self.users.insert(user_id, UserData::default());
+        
+        // Refund excess
+        let excess = deposit - required_deposit;
+        if excess > 0 {
+            Promise::new(env::predecessor_account_id())
+                .transfer(NearToken::from_yoctonear(excess));
+        }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 5. Access Control
+
+Always validate who is calling your functions.
+
+<Tabs>
+  <Tab title="Vulnerable">
+    ```rust
+    pub fn admin_withdraw(&mut self, amount: Balance) {
+        // ❌ No access control - anyone can withdraw!
+        Promise::new(env::predecessor_account_id())
+            .transfer(NearToken::from_yoctonear(amount));
+    }
+    ```
+  </Tab>
+  <Tab title="Secure">
+    ```rust
+    pub fn admin_withdraw(&mut self, amount: Balance) {
+        // ✅ Check caller is admin
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.admin,
+            "Only admin can withdraw"
+        );
+        
+        Promise::new(self.admin.clone())
+            .transfer(NearToken::from_yoctonear(amount));
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+**Common Mistake:** Using `signer_account_id` instead of `predecessor_account_id`.
+
+- `predecessor_account_id` - immediate caller (use for access control)
+- `signer_account_id` - original transaction signer (can be different in cross-contract calls)
+</Warning>
+
+---
+
+### 6. Random Number Generation
+
+Generating secure random numbers on-chain is difficult.
+
+<Tabs>
+  <Tab title="Insecure">
+    ```rust
+    // ❌ INSECURE: Predictable randomness
+    pub fn get_random(&self) -> u64 {
+        env::block_timestamp() % 100
+    }
+    ```
+  </Tab>
+  <Tab title="Better">
+    ```rust
+    // ✅ Better: Use random_seed (still not perfect)
+    pub fn get_random(&self) -> Vec<u8> {
+        env::random_seed()
+    }
+    
+    // ✅ Best: Use commit-reveal or VRF oracle
+    pub fn request_random(&mut self) -> Promise {
+        ext_vrf_oracle::ext(self.vrf_contract.clone())
+            .request_random()
+            .then(
+                Self::ext(env::current_account_id())
+                    .random_callback()
+            )
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+### 7. Integer Overflow/Underflow
+
+Always check arithmetic operations.
+
+<Tabs>
+  <Tab title="Vulnerable">
+    ```rust
+    // In Cargo.toml: [profile.release] (missing overflow-checks)
+    
+    pub fn transfer(&mut self, to: AccountId, amount: u128) {
+        let sender = env::predecessor_account_id();
+        let sender_balance = self.balances.get(&sender).unwrap_or(0);
+        
+        // ❌ Can underflow in release mode!
+        self.balances.insert(sender, sender_balance - amount);
+        
+        let receiver_balance = self.balances.get(&to).unwrap_or(0);
+        // ❌ Can overflow!
+        self.balances.insert(to, receiver_balance + amount);
+    }
+    ```
+  </Tab>
+  <Tab title="Secure">
+    ```toml
+    # In Cargo.toml:
+    [profile.release]
+    overflow-checks = true
+    ```
+    
+    ```rust
+    pub fn transfer(&mut self, to: AccountId, amount: u128) {
+        let sender = env::predecessor_account_id();
+        let sender_balance = self.balances.get(&sender).unwrap_or(0);
+        
+        // ✅ Explicit checks
+        assert!(sender_balance >= amount, "Insufficient balance");
+        
+        let receiver_balance = self.balances.get(&to).unwrap_or(0);
+        assert!(receiver_balance.checked_add(amount).is_some(), "Overflow");
+        
+        self.balances.insert(sender, sender_balance - amount);
+        self.balances.insert(to, receiver_balance + amount);
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Security Best Practices
+
+<AccordionGroup>
+  <Accordion title="1. Follow Checks-Effects-Interactions Pattern">
+    Always structure your functions as:
+    1. **Checks** - Validate inputs and conditions
+    2. **Effects** - Update state
+    3. **Interactions** - Call external contracts
+
+    This prevents reentrancy and ensures state consistency.
+  </Accordion>
+
+  <Accordion title="2. Use Explicit Access Control">
+    ```rust
+    fn require_owner(&self) {
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.owner,
+            "Only owner"
+        );
+    }
+
+    pub fn admin_function(&mut self) {
+        self.require_owner();
+        // Function logic
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="3. Validate All Inputs">
+    Never trust user inputs:
+    ```rust
+    pub fn set_price(&mut self, price: u128) {
+        assert!(price > 0, "Price must be positive");
+        assert!(price <= MAX_PRICE, "Price too high");
+        self.price = price;
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="4. Handle Storage Costs">
+    Always ensure sufficient balance for storage:
+    ```rust
+    let initial_storage = env::storage_usage();
+    // Perform operation
+    let final_storage = env::storage_usage();
+    let storage_cost = (final_storage - initial_storage) as u128 
+                        * env::storage_byte_cost();
+    assert!(env::account_balance() >= storage_cost, "Insufficient balance");
+    ```
+  </Accordion>
+
+  <Accordion title="5. Test Thoroughly">
+    - Write unit tests for all functions
+    - Write integration tests for realistic scenarios
+    - Test edge cases and failure modes
+    - Test on testnet before mainnet
+  </Accordion>
+
+  <Accordion title="6. Use Established Patterns">
+    Follow NEAR standards:
+    - NEP-141 for Fungible Tokens
+    - NEP-171 for NFTs
+    - NEP-145 for Storage Management
+    
+    These standards have been battle-tested and audited.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Security Auditing
+
+<Steps>
+  <Step title="Self-Review">
+    Go through the security checklist and review your code for common vulnerabilities.
+  </Step>
+  <Step title="Peer Review">
+    Have other developers review your code, especially security-critical sections.
+  </Step>
+  <Step title="Testnet Testing">
+    Deploy to testnet and test extensively with real users before mainnet.
+  </Step>
+  <Step title="Professional Audit">
+    For contracts handling significant value, get a professional security audit.
+  </Step>
+  <Step title="Bug Bounty">
+    Consider running a bug bounty program. NEAR has a [bug bounty program](https://hackenproof.com/company/near/programs).
+  </Step>
+</Steps>
+
+---
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Bug Bounty Program" icon="bug" href="https://hackenproof.com/company/near/programs">
+    Report security vulnerabilities and earn rewards
+  </Card>
+  <Card title="Testing Guide" icon="flask" href="/smart-contracts/testing">
+    Learn how to test your contracts
+  </Card>
+  <Card title="NEAR Standards" icon="book" href="https://github.com/near/NEPs">
+    Follow established contract standards
+  </Card>
+  <Card title="Example Contracts" icon="code" href="https://github.com/near-examples">
+    Study secure example implementations
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Testing" icon="flask" href="/smart-contracts/testing">
+    Learn comprehensive testing strategies
+  </Card>
+  <Card title="Deploy" icon="rocket" href="/smart-contracts/deploy">
+    Deploy your secure contract
+  </Card>
+  <Card title="Upgrade" icon="arrow-up" href="/smart-contracts/upgrade">
+    Learn safe upgrade practices
+  </Card>
+  <Card title="Monitor" icon="chart-line" href="/data/indexers">
+    Monitor your deployed contract
+  </Card>
+</CardGroup>

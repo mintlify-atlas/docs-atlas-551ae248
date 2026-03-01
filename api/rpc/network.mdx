@@ -1,0 +1,212 @@
+---
+title: 'Network'
+description: 'Query node status, network connections, and active validators using the RPC'
+---
+
+The RPC API enables you to query status information for nodes and validators.
+
+## Quick Reference
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| [`status`](#node-status) | _none_ | Returns general status of a given node and validator set |
+| [`network_info`](#network-info) | _none_ | Returns current state of node network connections |
+| [`validators`](#validation-status) | `epoch_id` OR `[null]` | Returns active validators on the network |
+
+## Node Status
+
+Returns general status of a given node (sync status, nearcore node version, protocol version, etc.), and the current set of validators.
+
+<ParamField query="method" type="string" required>
+  `status`
+</ParamField>
+
+<ParamField query="params" type="array" required>
+  `[]`
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "status",
+  "params": []
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://test.rpc.fastnear.com",
+});
+
+const response = await provider.status();
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=status \
+  params:='[]'
+```
+</CodeGroup>
+
+<ResponseExample>
+```json Example Response
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "chain_id": "testnet",
+    "genesis_hash": "FWJ9kR6KFWoyMoNjpLXXGHeuiy7tEY6GmoFeCA5yuc6b",
+    "latest_protocol_version": 73,
+    "node_key": null,
+    "node_public_key": "ed25519:DC7DbfZq4dkPqUKaKpWNimgtRBxnD9rja2KcZRs4e3DL",
+    "protocol_version": 73,
+    "rpc_addr": "0.0.0.0:3030",
+    "sync_info": {
+      "earliest_block_hash": "uz2gwgYxpx8dHsjgiPQefbwAhWk41CCvEmHU7ktYE2C",
+      "earliest_block_height": 187251995,
+      "earliest_block_time": "2025-02-10T13:54:22.616904144Z",
+      "epoch_id": "94jeudySZcxGBSVgKXn3xPT3P5iFF6YcnxC43F15QtkQ",
+      "epoch_start_height": 187443633,
+      "latest_block_hash": "EfL8Rc1EH13UxgbJB4skt8xSF8vojNQPcAX1opf6RFab",
+      "latest_block_height": 187456272,
+      "latest_block_time": "2025-02-12T22:10:10.530341781Z",
+      "latest_state_root": "3Vpebx4DuKAYmMjL96XMmLqWYUfuS2raZWoAbxFxeqBm",
+      "syncing": false
+    },
+    "uptime_sec": 6020117,
+    "validator_account_id": null,
+    "validator_public_key": null,
+    "validators": [
+      {
+        "account_id": "kiln.pool.f863973.m0",
+        "is_slashed": false
+      },
+      {
+        "account_id": "node2",
+        "is_slashed": false
+      }
+    ],
+    "version": {
+      "build": "2.4.0-rc.1",
+      "rustc_version": "1.82.0",
+      "version": "2.4.0-rc.1"
+    }
+  },
+  "id": "dontcare"
+}
+```
+</ResponseExample>
+
+## Network Info
+
+Returns the current state of node network connections (active peers, transmitted data, etc.)
+
+<ParamField query="method" type="string" required>
+  `network_info`
+</ParamField>
+
+<ParamField query="params" type="array">
+  _none_
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "network_info",
+  "params": []
+}
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=network_info \
+  params:='[]'
+```
+</CodeGroup>
+
+## Validation Status
+
+Queries active validators on the network returning details and the state of validation on the blockchain.
+
+<ParamField query="method" type="string" required>
+  `validators`
+</ParamField>
+
+<ParamField query="params" type="array | object" required>
+  `[null]` for current validators, or `{"epoch_id": "..."}` for specific epoch
+</ParamField>
+
+<Note>
+You can obtain the `epoch_id` from a block that belongs to a specific epoch. If you want to retrieve the current list of validators, pass `null` as the parameter. Additionally, you can query validators for past epochs by providing the `epoch_id` of the desired past epoch.
+</Note>
+
+### Query current validators
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "validators",
+  "params": [null]
+}
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=validators \
+  params:='[null]'
+```
+</CodeGroup>
+
+### Query by epoch_id
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "validators",
+  "params": {
+    "epoch_id": "94jeudySZcxGBSVgKXn3xPT3P5iFF6YcnxC43F15QtkQ"
+  }
+}
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=validators \
+  params:='{"epoch_id": "94jeudySZcxGBSVgKXn3xPT3P5iFF6YcnxC43F15QtkQ"}'
+```
+</CodeGroup>
+
+## Error Handling
+
+### Common Error Types
+
+| Error Code | Description | Solution |
+|------------|-------------|----------|
+| `UnknownEpoch` | Epoch ID not found | Use a valid epoch ID from existing blocks |
+| `InvalidAccount` | Invalid account format | Use valid account ID format (e.g., `account.near`) |
+| `RequestTimeout` | Request timed out | Retry the request or use a different RPC endpoint |
+| `InternalError` | Server-side error | Retry the request after a short delay |
+| `MethodNotFound` | Invalid method name | Check method spelling and API version |
+
+## Best Practices
+
+- **Cache validator data**: Validator information changes infrequently, consider caching for several minutes
+- **Use specific queries**: Request only the data you need to minimize response size
+- **Monitor network health**: Use `status` endpoint to check node sync status before other operations

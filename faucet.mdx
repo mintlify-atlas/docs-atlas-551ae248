@@ -1,0 +1,286 @@
+---
+title: 'Testnet Faucet'
+description: 'Get free testnet tokens for development and testing on the NEAR blockchain'
+icon: 'faucet-drip'
+---
+
+## Overview
+
+A **faucet** provides free testnet tokens for testing and development purposes. This allows you to experiment with NEAR Protocol without spending real money.
+
+<Info>
+  Testnet tokens have no real-world value and are only for development and testing.
+</Info>
+
+There are two testnet faucets available:
+
+1. **Built-in Faucet** - Provides native testnet NEAR tokens only
+2. **External Faucet** - Supports multiple fungible tokens (NEAR, USDT, USDC, and more)
+
+<Warning>
+  If any of the faucets is not working, please report it on the [NEAR Telegram Channel](https://t.me/neardev).
+</Warning>
+
+## Built-in Faucet
+
+The simplest way to get testnet NEAR tokens is to use the built-in faucet.
+
+<Steps>
+  <Step title="Enter Your Account">
+    Input your testnet account name (e.g., `yourname.testnet`).
+    
+    <Note>
+      You must have a testnet account created first. If you don't have one, visit the [Quick Start guide](/quickstart) to create an account.
+    </Note>
+  </Step>
+
+  <Step title="Request Tokens">
+    Click the "Request" button to receive testnet NEAR tokens.
+    
+    The faucet will send a small amount of testnet NEAR tokens (typically 10-20 NEAR) to your account.
+  </Step>
+
+  <Step title="Verify Receipt">
+    Check your account balance to confirm you received the tokens:
+    
+    ```bash
+    near state yourname.testnet
+    ```
+  </Step>
+</Steps>
+
+## External Faucet
+
+For more token options, use the [Testnet Faucet](https://near-faucet.io/) which supports a wide range of fungible tokens.
+
+### Supported Tokens
+
+The external faucet provides:
+
+<CardGroup cols={3}>
+  <Card title="NEAR" icon="n">
+    Native NEAR Protocol tokens
+  </Card>
+  <Card title="USDT" icon="dollar-sign">
+    Tether USD stablecoin
+  </Card>
+  <Card title="USDC" icon="dollar-sign">
+    USD Coin stablecoin
+  </Card>
+  <Card title="DAI" icon="dollar-sign">
+    DAI stablecoin
+  </Card>
+  <Card title="WETH" icon="ethereum">
+    Wrapped Ethereum
+  </Card>
+  <Card title="Other Tokens" icon="coins">
+    Various other fungible tokens
+  </Card>
+</CardGroup>
+
+### How to Use
+
+<Steps>
+  <Step title="Visit the Faucet">
+    Navigate to [near-faucet.io](https://near-faucet.io/)
+  </Step>
+
+  <Step title="Input Your Address">
+    Enter your testnet account name (e.g., `yourname.testnet`)
+  </Step>
+
+  <Step title="Select Token Type">
+    Choose which type of token you need from the dropdown menu
+  </Step>
+
+  <Step title="Request Tokens">
+    Click the request button and wait for the transaction to complete
+  </Step>
+</Steps>
+
+<Tip>
+  The external faucet may have rate limits to prevent abuse. If you need more tokens, wait a few hours before requesting again.
+</Tip>
+
+<Note>
+  The faucet might be out of certain tokens at times. See the alternative methods below if this happens.
+</Note>
+
+## Alternative: Get Tokens via DEX
+
+Another way to get fungible tokens on testnet is through the testnet version of Ref Finance, a decentralized exchange (DEX) on NEAR.
+
+### Using Ref Finance Testnet
+
+<Steps>
+  <Step title="Visit Ref Finance Testnet">
+    Go to [testnet.ref.finance](https://testnet.ref.finance/#near|ref.fakes.testnet)
+  </Step>
+
+  <Step title="Connect Your Wallet">
+    Connect your testnet wallet to the application
+  </Step>
+
+  <Step title="Swap Tokens">
+    Swap testnet NEAR for other fungible tokens:
+    - Testnet USDC
+    - Testnet USDT
+    - Testnet DAI
+    - Other available tokens
+  </Step>
+</Steps>
+
+<Warning>
+  Token rates on testnet might not match mainnet rates (e.g., 1 USDC might not exchange to the same amount of NEAR as on mainnet). Liquidity on testnet may also be very low.
+</Warning>
+
+## Faucet Best Practices
+
+<CardGroup cols={2}>
+  <Card title="Request Only What You Need" icon="hand-holding-droplet">
+    Be considerate of other developers and only request tokens you'll actually use
+  </Card>
+  <Card title="Use Testnet First" icon="flask">
+    Always test your applications thoroughly on testnet before deploying to mainnet
+  </Card>
+  <Card title="Monitor Your Balance" icon="chart-line">
+    Keep track of your testnet token usage to avoid running out during testing
+  </Card>
+  <Card title="Report Issues" icon="bug">
+    If you encounter faucet problems, report them to help the community
+  </Card>
+</CardGroup>
+
+## Common Use Cases
+
+### Smart Contract Development
+
+You'll need testnet tokens to:
+- Deploy contracts to testnet
+- Pay for gas fees during testing
+- Test token transfers and contract interactions
+
+```bash
+# Deploy a contract (requires testnet NEAR)
+near deploy --accountId yourcontract.testnet --wasmFile contract.wasm
+
+# Call a contract method
+near call yourcontract.testnet method_name '{"arg": "value"}' --accountId yourname.testnet
+```
+
+### Web3 Application Testing
+
+Test your dApp with various tokens:
+- Test user onboarding flows
+- Simulate token swaps and transfers
+- Verify contract interactions
+- Test cross-contract calls
+
+### Multi-Token Testing
+
+If you're building a DeFi application or working with multiple tokens:
+
+1. Get testnet NEAR from the built-in faucet
+2. Get other tokens (USDT, USDC) from the external faucet
+3. Use Ref Finance to swap between tokens
+4. Test your application with different token combinations
+
+## Troubleshooting
+
+<AccordionGroup>
+  <Accordion title="Faucet request failed">
+    If your faucet request fails:
+    
+    - **Verify your account exists**: Make sure you created a testnet account first
+    - **Check account format**: Account should end with `.testnet`
+    - **Try again later**: The faucet may be temporarily unavailable
+    - **Use alternative faucet**: Try the other faucet option
+    - **Report the issue**: Contact support via [Telegram](https://t.me/neardev)
+  </Accordion>
+
+  <Accordion title="Didn't receive tokens">
+    If you requested tokens but didn't receive them:
+    
+    1. Wait a few minutes - transactions may take time
+    2. Check your account balance:
+       ```bash
+       near state yourname.testnet
+       ```
+    3. Verify the transaction on the [testnet explorer](https://explorer.testnet.near.org/)
+    4. Try the alternative faucet
+  </Accordion>
+
+  <Accordion title="Need more tokens">
+    If you've exhausted the faucet limits:
+    
+    - **Wait for cooldown**: Faucets have rate limits, usually 24 hours
+    - **Ask the community**: Request tokens in [NEAR Discord](https://discord.gg/near) or [Telegram](https://t.me/neardev)
+    - **Use Ref Finance**: Swap NEAR for other tokens if you need different token types
+    - **Create multiple accounts**: If absolutely necessary for testing, create additional testnet accounts
+  </Accordion>
+
+  <Accordion title="External faucet out of tokens">
+    If the external faucet is out of a specific token:
+    
+    1. Get testnet NEAR from the built-in faucet
+    2. Use [Ref Finance testnet](https://testnet.ref.finance) to swap for the tokens you need
+    3. Check back later - faucets are regularly refilled
+    4. Report the issue on [Telegram](https://t.me/neardev)
+  </Accordion>
+</AccordionGroup>
+
+## Moving to Mainnet
+
+Once you've completed testing with testnet tokens:
+
+<Steps>
+  <Step title="Thoroughly Test">
+    Ensure all functionality works correctly on testnet
+  </Step>
+
+  <Step title="Create Mainnet Account">
+    Set up a mainnet account at [MyNEARWallet](https://app.mynearwallet.com/)
+  </Step>
+
+  <Step title="Acquire Real NEAR">
+    Purchase NEAR tokens from an exchange or use other acquisition methods
+  </Step>
+
+  <Step title="Deploy to Mainnet">
+    Deploy your tested contracts and applications to mainnet
+    
+    ```bash
+    export NEAR_ENV=mainnet
+    near deploy --accountId yourcontract.near --wasmFile contract.wasm
+    ```
+  </Step>
+</Steps>
+
+<Warning>
+  Mainnet transactions use real NEAR tokens with real value. Always test thoroughly on testnet first.
+</Warning>
+
+## Additional Resources
+
+<CardGroup cols={2}>
+  <Card title="Quick Start Guide" icon="rocket" href="/quickstart">
+    Complete guide to getting started with NEAR
+  </Card>
+  <Card title="Create an Account" icon="user-plus" href="/tutorials/protocol/create-account">
+    Learn how to create a NEAR account
+  </Card>
+  <Card title="Smart Contracts" icon="file-contract" href="/smart-contracts/quickstart">
+    Build your first smart contract
+  </Card>
+  <Card title="NEAR Explorer" icon="magnifying-glass" href="https://explorer.testnet.near.org/">
+    View testnet transactions and accounts
+  </Card>
+</CardGroup>
+
+## Get Help
+
+Need assistance with the faucet or testnet tokens?
+
+- [NEAR Discord](https://discord.gg/near) - Community support
+- [NEAR Telegram](https://t.me/neardev) - Developer chat
+- [GitHub Issues](https://github.com/near/near-faucet) - Report technical issues

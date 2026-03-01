@@ -1,0 +1,422 @@
+---
+title: Contract State (Storage)
+description: Learn how NEAR smart contracts manage their state, including initialization, serialization, and storage costs.
+---
+
+Smart contracts store data in their account's state, which is public on the blockchain. The storage starts **empty** until a contract is deployed and the state is initialized.
+
+<Info>
+The account's **code** and account's **storage** are **independent**. Updating the code does **not erase** the state.
+</Info>
+
+---
+
+## Defining the State
+
+The attributes of the contract structure define the data that will be stored.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, AccountId, PanicOnDefault};
+    use near_sdk::store::UnorderedMap;
+
+    #[near(serializers=[borsh])]
+    pub struct Bid {
+        pub bidder: AccountId,
+        pub amount: u128,
+    }
+
+    #[near(contract_state)]
+    #[derive(PanicOnDefault)]
+    pub struct AuctionContract {
+        highest_bid: Bid,
+        auction_end_time: u64,
+        auctioneer: AccountId,
+        claimed: bool,
+        // Collections for efficient storage
+        bids_history: UnorderedMap<AccountId, Vec<u128>>,
+    }
+    ```
+
+    <Note>
+    **Borsh Serialization**
+
+    Structures that will be saved need a special macro that tells the SDK to store them serialized in Borsh format:
+    ```rust
+    #[near(serializers=[borsh])]
+    ```
+    </Note>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, near } from 'near-sdk-js';
+    import { UnorderedMap } from 'near-sdk-js/lib/collections';
+
+    @NearBindgen({ requireInit: true })
+    class AuctionContract {
+      highest_bid = { bidder: '', amount: '0' };
+      auction_end_time = '';
+      auctioneer = '';
+      claimed = false;
+      // Collections for efficient storage
+      bids_history = new UnorderedMap('bids');
+
+      schema = {
+        highest_bid: { bidder: 'string', amount: 'string' },
+        auction_end_time: 'string',
+        auctioneer: 'string',
+        claimed: 'boolean',
+      };
+    }
+    ```
+
+    <Info>
+    JavaScript contracts need a `schema` object that defines the contract's state types for proper serialization and deserialization.
+    </Info>
+  </Tab>
+</Tabs>
+
+<Warning>
+**Storage Costs**
+
+Contracts pay for their storage by locking part of their balance.
+
+It currently costs approximately **1Ⓝ to store 100KB** of data.
+</Warning>
+
+---
+
+## Initializing the State
+
+After the contract is deployed, its state is empty and needs to be initialized. There are two ways to initialize state:
+
+### 1. Initialization Functions
+
+Create an initialization function that sets initial values.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, PanicOnDefault};
+
+    #[near(contract_state)]
+    #[derive(PanicOnDefault)]
+    pub struct Contract {
+        owner: AccountId,
+        start_time: u64,
+        config: Config,
+    }
+
+    #[near]
+    impl Contract {
+        #[init]
+        #[private]
+        pub fn init(owner: AccountId, config: Config) -> Self {
+            Self {
+                owner,
+                start_time: env::block_timestamp(),
+                config,
+            }
+        }
+    }
+    ```
+
+    <Note>
+    - The initialization function is marked with `#[init]`
+    - `#[derive(PanicOnDefault)]` forces users to call init before using the contract
+    - Mark init functions as `#[private]` to restrict who can initialize
+    </Note>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, initialize, near } from 'near-sdk-js';
+
+    @NearBindgen({ requireInit: true })
+    class Contract {
+      owner = '';
+      start_time = '';
+      config = {};
+
+      @initialize({ privateFunction: true })
+      init({ owner, config }) {
+        this.owner = owner;
+        this.start_time = near.blockTimestamp();
+        this.config = config;
+      }
+    }
+    ```
+
+    <Note>
+    - The initialization function uses the `@initialize` decorator
+    - Set `requireInit: true` in `@NearBindgen` to enforce initialization
+    - Mark as `privateFunction: true` to restrict initialization
+    </Note>
+  </Tab>
+</Tabs>
+
+### 2. Default State
+
+Set default values for the contract attributes.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::near;
+
+    #[near(contract_state)]
+    pub struct Contract {
+        greeting: String,
+        counter: u64,
+    }
+
+    impl Default for Contract {
+        fn default() -> Self {
+            Self {
+                greeting: "Hello".to_string(),
+                counter: 0,
+            }
+        }
+    }
+    ```
+
+    <Info>
+    Implement the `Default` trait to provide default values. The first time the contract is called, these defaults will be stored.
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen } from 'near-sdk-js';
+
+    @NearBindgen({})
+    class Contract {
+      greeting = "Hello";  // Default value
+      counter = 0;         // Default value
+
+      schema = {
+        greeting: 'string',
+        counter: 'number',
+      };
+    }
+    ```
+
+    <Info>
+    Simply assign default values to class attributes. The first time the contract is called, these defaults will be stored.
+    </Info>
+  </Tab>
+</Tabs>
+
+<Warning>
+The state can only be initialized once!
+</Warning>
+
+---
+
+## State Lifecycle
+
+Understanding how state is managed during contract execution:
+
+<Steps>
+  <Step title="Load">
+    When a function is called, the contract's state is loaded from storage into memory and deserialized.
+  </Step>
+  <Step title="Execute">
+    The function executes with access to the deserialized state.
+  </Step>
+  <Step title="Save">
+    When the method finishes successfully, all changes to the state are serialized and saved back to storage.
+  </Step>
+</Steps>
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[near]
+    impl Contract {
+        pub fn increment(&mut self) {
+            // 1. State loaded and deserialized
+            // 2. Modify the state
+            self.counter += 1;
+            near_sdk::log!("Counter: {}", self.counter);
+            // 3. State serialized and saved automatically
+        }
+
+        pub fn get_counter(&self) -> u64 {
+            // State loaded but not modified
+            self.counter
+            // No save needed
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      counter = 0;
+
+      @call({})
+      increment() {
+        // 1. State loaded and deserialized
+        // 2. Modify the state
+        this.counter += 1;
+        near.log(`Counter: ${this.counter}`);
+        // 3. State serialized and saved automatically
+      }
+
+      @view({})
+      get_counter() {
+        // State loaded but not modified
+        return this.counter;
+        // No save needed
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Storage Collections
+
+For efficient storage of large amounts of data, use NEAR's storage collections instead of native data structures.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::store::{UnorderedMap, Vector, UnorderedSet};
+    use near_sdk::{near, AccountId};
+
+    #[near(contract_state)]
+    pub struct Contract {
+        // Each collection needs a unique prefix
+        users: UnorderedMap<AccountId, User>,
+        messages: Vector<String>,
+        admins: UnorderedSet<AccountId>,
+    }
+
+    #[near]
+    impl Contract {
+        #[init]
+        pub fn new() -> Self {
+            Self {
+                users: UnorderedMap::new(b"u"),
+                messages: Vector::new(b"m"),
+                admins: UnorderedSet::new(b"a"),
+            }
+        }
+    }
+    ```
+
+    <Warning>
+    Each collection must have a **unique prefix** (e.g., `b"u"`, `b"m"`, `b"a"`) to avoid storage collisions.
+    </Warning>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen } from 'near-sdk-js';
+    import { UnorderedMap, Vector, UnorderedSet } from 'near-sdk-js/lib/collections';
+
+    @NearBindgen({})
+    class Contract {
+      // Each collection needs a unique prefix
+      users = new UnorderedMap('users');
+      messages = new Vector('messages');
+      admins = new UnorderedSet('admins');
+
+      constructor() {
+        this.users = new UnorderedMap('users');
+        this.messages = new Vector('messages');
+        this.admins = new UnorderedSet('admins');
+      }
+    }
+    ```
+
+    <Warning>
+    Each collection must have a **unique prefix** string to avoid storage collisions.
+    </Warning>
+  </Tab>
+</Tabs>
+
+<Info>
+**Why use collections?**
+
+- Native arrays/maps load all data into memory on every call
+- Collections load only needed elements, saving gas
+- Better performance for large datasets
+</Info>
+
+---
+
+## State and Code Independence
+
+<Warning>
+**Important: State Persists Through Updates**
+
+In NEAR, the contract's code and contract's storage are **independent**.
+
+Updating the code does **not erase** the state, which can lead to unexpected behavior or errors if the new code expects a different state structure.
+</Warning>
+
+When updating a contract:
+
+1. **Adding methods** - ✅ No problems
+2. **Modifying existing methods** - ✅ Usually safe if state structure unchanged
+3. **Modifying state structure** - ⚠️ Requires migration
+
+<Card title="Learn About Contract Updates" icon="arrow-up" href="/smart-contracts/upgrade">
+  See how to safely update contracts and migrate state
+</Card>
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Minimize Storage Usage">
+    Every byte stored costs NEAR tokens. Design your state efficiently:
+    - Use compact data types
+    - Clean up unused data
+    - Consider using collections for large datasets
+  </Accordion>
+
+  <Accordion title="Ensure Sufficient Balance">
+    Always ensure your contract has enough balance to cover storage costs:
+    ```rust
+    let required_storage = env::storage_usage() as u128 * env::storage_byte_cost();
+    assert!(env::account_balance() >= required_storage, "Insufficient balance for storage");
+    ```
+  </Accordion>
+
+  <Accordion title="Use Unique Collection Prefixes">
+    When using multiple collections, ensure each has a unique prefix to avoid storage collisions:
+    ```rust
+    users: UnorderedMap::new(b"u"),
+    posts: UnorderedMap::new(b"p"),
+    comments: Vector::new(b"c"),
+    ```
+  </Accordion>
+
+  <Accordion title="Initialize Before Use">
+    Always initialize your contract's state before allowing user interactions. Use `#[init]` functions or the `PanicOnDefault` derive to enforce this.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Functions" icon="function" href="/smart-contracts/functions">
+    Learn about function types
+  </Card>
+  <Card title="Cross-Contract Calls" icon="network-wired" href="/smart-contracts/crosscontract">
+    Interact with other contracts
+  </Card>
+  <Card title="Upgrade" icon="arrow-up" href="/smart-contracts/upgrade">
+    Update contracts safely
+  </Card>
+  <Card title="Security" icon="shield" href="/smart-contracts/security">
+    Security best practices
+  </Card>
+</CardGroup>

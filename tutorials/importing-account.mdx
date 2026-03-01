@@ -1,0 +1,124 @@
+---
+title: Importing a NEAR account
+description: Learn how to import an existing NEAR account into a wallet or the CLI
+---
+
+If you created a NEAR account using a wallet or the CLI, you can export its seed phrase (or private key) to use it in other wallets or tools.
+
+<Tip>
+If you don't have a NEAR account yet, check out our guide on [Creating a NEAR account](/tutorials/create-account)
+</Tip>
+
+## Exporting your seed phrase
+
+<Tabs>
+  <Tab title="From a wallet">
+    You can export your seed phrase from the wallet you used to create your account. Most wallets will have an option to "Export Seed Phrase" or "Backup Account". Follow the instructions provided by your specific wallet.
+    
+    <Warning>
+    Never share your seed phrase with anyone. Anyone with your seed phrase has full access to your account and funds.
+    </Warning>
+  </Tab>
+  
+  <Tab title="From the CLI">
+    If you created your account using the CLI, you can export your seed phrase using:
+    
+    ```bash
+    near account export-account <account.testnet>
+    ```
+    
+    This will display your seed phrase in the terminal.
+  </Tab>
+</Tabs>
+
+## Importing into a wallet
+
+To import an existing account into a wallet:
+
+<Steps>
+  <Step title="Choose your wallet">
+    Visit [wallet.near.org](https://wallet.near.org/) and select the wallet you want to use.
+  </Step>
+  
+  <Step title="Find the import option">
+    Most wallets will have an option to "Import Account", "Restore from Seed Phrase", or similar.
+  </Step>
+  
+  <Step title="Enter your seed phrase">
+    Carefully enter your seed phrase exactly as it was provided. The order of words matters!
+  </Step>
+  
+  <Step title="Verify and complete">
+    Follow any additional steps required by your wallet to complete the import process.
+  </Step>
+</Steps>
+
+## Importing into the CLI
+
+To import an existing account into the CLI:
+
+<Steps>
+  <Step title="Run the import command">
+    ```bash
+    near account import-account
+    ```
+  </Step>
+  
+  <Step title="Follow the prompts">
+    The CLI will prompt you to:
+    - Enter your account ID
+    - Provide your seed phrase or private key
+    - Choose where to store the credentials
+  </Step>
+  
+  <Step title="Verify the import">
+    Once imported, verify your account:
+    
+    ```bash
+    near account view-account-summary <your-account>.testnet
+    ```
+  </Step>
+</Steps>
+
+## Security best practices
+
+<AccordionGroup>
+  <Accordion title="Keep your seed phrase secure">
+    - Never share your seed phrase with anyone
+    - Don't store it in plain text files on your computer
+    - Consider using a password manager for secure storage
+    - Write it down and keep it in a safe place
+  </Accordion>
+  
+  <Accordion title="Use different accounts for different purposes">
+    - Keep separate accounts for testing (testnet) and production (mainnet)
+    - Don't use development accounts for storing valuable assets
+    - Create dedicated accounts for specific applications
+  </Accordion>
+  
+  <Accordion title="Regularly backup your accounts">
+    - Export and securely store seed phrases for important accounts
+    - Test the recovery process to ensure your backups work
+    - Keep backups in multiple secure locations
+  </Accordion>
+</AccordionGroup>
+
+## What's next?
+
+<CardGroup cols={2}>
+  <Card title="Create a new account" icon="user-plus" href="/tutorials/create-account">
+    Learn how to create a new NEAR account
+  </Card>
+  
+  <Card title="Build a smart contract" icon="code" href="/smart-contracts/quickstart">
+    Start developing on NEAR
+  </Card>
+  
+  <Card title="Get testnet tokens" icon="faucet" href="/faucet">
+    Fund your testnet account
+  </Card>
+  
+  <Card title="Understand access keys" icon="key" href="/protocol/access-keys">
+    Learn about NEAR's access key system
+  </Card>
+</CardGroup>

@@ -1,0 +1,691 @@
+---
+title: Authenticate NEAR Users
+sidebarTitle: Backend Login
+description: Learn how to authenticate NEAR users in your backend service by creating challenges, requesting wallet signatures, and verifying signatures using NEP-413.
+---
+
+NEAR's NEP-413 standard enables users to authenticate into backend services by signing messages with their wallet. This provides a secure, decentralized authentication method without requiring passwords or centralized identity providers.
+
+<Info>
+  This authentication method is based on [NEP-413](https://github.com/near/NEPs/blob/master/neps/nep-0413.md), NEAR's standard for message signing and verification.
+</Info>
+
+---
+
+## How It Works
+
+Backend authentication with NEAR wallets follows a three-step process:
+
+<Steps>
+  <Step title="Create a Challenge">
+    The backend generates a cryptographically secure random challenge (nonce) that the user must sign.
+  </Step>
+  
+  <Step title="Request Signature">
+    The frontend asks the user to sign the challenge with their wallet, which proves ownership of the account.
+  </Step>
+  
+  <Step title="Verify Signature">
+    The backend verifies that the signature is valid and corresponds to the claimed user account.
+  </Step>
+</Steps>
+
+<Frame>
+  <img src="/images/backend-auth-flow.png" alt="Backend authentication flow diagram" />
+</Frame>
+
+---
+
+## Backend: Create a Challenge
+
+The first step is to create a unique challenge for the user to sign. This should be a cryptographically secure random value.
+
+<CodeGroup>
+```javascript Node.js
+import { randomBytes } from 'crypto';
+
+// API endpoint to request a challenge
+app.post('/auth/challenge', async (req, res) => {
+  const { accountId } = req.body;
+  
+  // Generate a 32-byte random challenge
+  const challenge = randomBytes(32);
+  
+  // Store challenge temporarily (with expiration)
+  // Use Redis, in-memory cache, or database
+  await redis.setex(
+    `auth:challenge:${accountId}`,
+    300, // 5 minutes expiration
+    challenge.toString('base64')
+  );
+  
+  res.json({
+    challenge: challenge.toString('base64'),
+    message: 'Sign in to My App',
+    recipient: 'my-app.near', // Your app identifier
+  });
+});
+```
+
+```python Python (FastAPI)
+from fastapi import FastAPI
+import secrets
+import base64
+from datetime import timedelta
+
+app = FastAPI()
+
+@app.post("/auth/challenge")
+async def create_challenge(account_id: str):
+    # Generate a 32-byte random challenge
+    challenge = secrets.token_bytes(32)
+    
+    # Store challenge temporarily
+    await redis.setex(
+        f"auth:challenge:{account_id}",
+        timedelta(minutes=5),
+        base64.b64encode(challenge)
+    )
+    
+    return {
+        "challenge": base64.b64encode(challenge).decode(),
+        "message": "Sign in to My App",
+        "recipient": "my-app.near"
+    }
+```
+
+```go Go
+package main
+
+import (
+    "crypto/rand"
+    "encoding/base64"
+    "github.com/gin-gonic/gin"
+    "time"
+)
+
+func createChallenge(c *gin.Context) {
+    var req struct {
+        AccountID string `json:"accountId"`
+    }
+    
+    if err := c.BindJSON(&req); err != nil {
+        c.JSON(400, gin.H{"error": "Invalid request"})
+        return
+    }
+    
+    // Generate 32-byte challenge
+    challenge := make([]byte, 32)
+    rand.Read(challenge)
+    
+    // Store in Redis with 5 minute expiration
+    encodedChallenge := base64.StdEncoding.EncodeToString(challenge)
+    redis.Set("auth:challenge:" + req.AccountID, encodedChallenge, 5*time.Minute)
+    
+    c.JSON(200, gin.H{
+        "challenge": encodedChallenge,
+        "message":   "Sign in to My App",
+        "recipient": "my-app.near",
+    })
+}
+```
+</CodeGroup>
+
+<Warning>
+  Always use cryptographically secure random number generators like `crypto.randomBytes()`. Never use `Math.random()` or similar functions for security-critical operations.
+</Warning>
+
+---
+
+## Frontend: Request Signature
+
+Once you have the challenge from your backend, request the user to sign it with their wallet.
+
+<Tabs>
+  <Tab title="React Hooks">
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+    import { useState } from 'react';
+
+    function LoginButton() {
+      const { signNEP413Message, accountId } = useNearWallet();
+      const [loading, setLoading] = useState(false);
+
+      const handleLogin = async () => {
+        if (!accountId) {
+          alert('Please connect your wallet first');
+          return;
+        }
+
+        setLoading(true);
+
+        try {
+          // 1. Request challenge from backend
+          const challengeResponse = await fetch('https://api.myapp.com/auth/challenge', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId }),
+          });
+
+          const { challenge, message, recipient } = await challengeResponse.json();
+
+          // 2. Request user to sign the challenge
+          const signature = await signNEP413Message({
+            message,
+            recipient,
+            nonce: Buffer.from(challenge, 'base64'),
+          });
+
+          // 3. Send signature to backend for verification
+          const authResponse = await fetch('https://api.myapp.com/auth/verify', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId,
+              signature: signature.signature,
+              publicKey: signature.publicKey,
+            }),
+          });
+
+          const { token } = await authResponse.json();
+
+          // 4. Store authentication token
+          localStorage.setItem('authToken', token);
+          
+          alert('Successfully authenticated!');
+        } catch (error) {
+          console.error('Authentication failed:', error);
+          alert('Authentication failed. Please try again.');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <button onClick={handleLogin} disabled={loading}>
+          {loading ? 'Authenticating...' : 'Sign In with NEAR'}
+        </button>
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="NEAR Connect">
+    ```tsx
+    import { NearConnector } from '@hot-labs/near-connect';
+
+    async function authenticateUser(connector: NearConnector, accountId: string) {
+      // 1. Request challenge from backend
+      const challengeResponse = await fetch('https://api.myapp.com/auth/challenge', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId }),
+      });
+
+      const { challenge, message, recipient } = await challengeResponse.json();
+
+      // 2. Get wallet and request signature
+      const wallet = await connector.wallet();
+      
+      const signature = await wallet.signMessage({
+        message,
+        recipient,
+        nonce: Buffer.from(challenge, 'base64'),
+      });
+
+      // 3. Send signature to backend
+      const authResponse = await fetch('https://api.myapp.com/auth/verify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          accountId,
+          signature: signature.signature,
+          publicKey: signature.publicKey,
+        }),
+      });
+
+      const { token } = await authResponse.json();
+      return token;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  The message signing feature (NEP-413) is supported by most NEAR wallets including Meteor Wallet, Here Wallet, MyNearWallet, Near Snap, Nightly Wallet, WELLDONE Wallet, Sender, and Intear Wallet.
+</Note>
+
+---
+
+## Backend: Verify Signature
+
+The final step is to verify that the signature is valid and corresponds to the user's account.
+
+<CodeGroup>
+```javascript Node.js
+import { utils } from 'near-api-js';
+import bs58 from 'bs58';
+
+app.post('/auth/verify', async (req, res) => {
+  const { accountId, signature, publicKey } = req.body;
+
+  try {
+    // 1. Retrieve the stored challenge
+    const storedChallenge = await redis.get(`auth:challenge:${accountId}`);
+    
+    if (!storedChallenge) {
+      return res.status(400).json({ error: 'Challenge expired or not found' });
+    }
+
+    // 2. Reconstruct the message that was signed
+    const message = 'Sign in to My App';
+    const recipient = 'my-app.near';
+    const nonce = Buffer.from(storedChallenge, 'base64');
+
+    // NEP-413 message format
+    const payload = {
+      tag: 2147484061, // NEP-413 tag
+      message,
+      recipient,
+      nonce: Array.from(nonce),
+    };
+
+    const borshPayload = borsh.serialize(
+      {
+        struct: {
+          tag: 'u32',
+          message: 'string',
+          recipient: 'string',
+          nonce: { array: { type: 'u8', len: 32 } },
+        },
+      },
+      payload
+    );
+
+    // 3. Verify the signature
+    const publicKeyObj = utils.PublicKey.from(publicKey);
+    const signatureBytes = bs58.decode(signature);
+    
+    const isValid = publicKeyObj.verify(
+      new Uint8Array(borshPayload),
+      signatureBytes
+    );
+
+    if (!isValid) {
+      return res.status(401).json({ error: 'Invalid signature' });
+    }
+
+    // 4. Verify the public key belongs to the account
+    const provider = new providers.JsonRpcProvider({ 
+      url: 'https://rpc.mainnet.near.org' 
+    });
+    
+    const accessKeys = await provider.query({
+      request_type: 'view_access_key_list',
+      account_id: accountId,
+      finality: 'final',
+    });
+
+    const hasKey = accessKeys.keys.some(
+      (key) => key.public_key === publicKey
+    );
+
+    if (!hasKey) {
+      return res.status(401).json({ error: 'Public key not found on account' });
+    }
+
+    // 5. Delete the used challenge
+    await redis.del(`auth:challenge:${accountId}`);
+
+    // 6. Generate JWT token
+    const token = jwt.sign(
+      { accountId, publicKey },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.json({ token, accountId });
+  } catch (error) {
+    console.error('Verification error:', error);
+    res.status(500).json({ error: 'Verification failed' });
+  }
+});
+```
+
+```python Python (FastAPI)
+from fastapi import FastAPI, HTTPException
+from near_api import providers, utils
+import base58
+import borsh
+import jwt
+from datetime import datetime, timedelta
+
+app = FastAPI()
+
+@app.post("/auth/verify")
+async def verify_signature(account_id: str, signature: str, public_key: str):
+    try:
+        # 1. Retrieve stored challenge
+        stored_challenge = await redis.get(f"auth:challenge:{account_id}")
+        
+        if not stored_challenge:
+            raise HTTPException(400, "Challenge expired or not found")
+
+        # 2. Reconstruct message
+        message = "Sign in to My App"
+        recipient = "my-app.near"
+        nonce = base64.b64decode(stored_challenge)
+
+        # Create NEP-413 payload
+        payload = {
+            "tag": 2147484061,
+            "message": message,
+            "recipient": recipient,
+            "nonce": list(nonce)
+        }
+
+        # Serialize with borsh
+        schema = {
+            "struct": {
+                "tag": "u32",
+                "message": "string",
+                "recipient": "string",
+                "nonce": {"array": {"type": "u8", "len": 32}}
+            }
+        }
+        borsh_payload = borsh.serialize(schema, payload)
+
+        # 3. Verify signature
+        public_key_obj = utils.PublicKey.from_string(public_key)
+        signature_bytes = base58.b58decode(signature)
+        
+        is_valid = public_key_obj.verify(bytes(borsh_payload), signature_bytes)
+
+        if not is_valid:
+            raise HTTPException(401, "Invalid signature")
+
+        # 4. Verify key belongs to account
+        provider = providers.JsonRpcProvider("https://rpc.mainnet.near.org")
+        
+        access_keys = await provider.query({
+            "request_type": "view_access_key_list",
+            "account_id": account_id,
+            "finality": "final"
+        })
+
+        has_key = any(key["public_key"] == public_key for key in access_keys["keys"])
+
+        if not has_key:
+            raise HTTPException(401, "Public key not found on account")
+
+        # 5. Delete used challenge
+        await redis.delete(f"auth:challenge:{account_id}")
+
+        # 6. Generate JWT
+        token = jwt.encode(
+            {
+                "accountId": account_id,
+                "publicKey": public_key,
+                "exp": datetime.utcnow() + timedelta(days=7)
+            },
+            JWT_SECRET,
+            algorithm="HS256"
+        )
+
+        return {"token": token, "accountId": account_id}
+
+    except Exception as e:
+        raise HTTPException(500, f"Verification failed: {str(e)}")
+```
+</CodeGroup>
+
+<Tip>
+  You can also use the [near-api-js verify-signature example](https://github.com/near-examples/near-api-examples/blob/main/near-api-js/examples/verify-signature.ts) as a reference implementation.
+</Tip>
+
+---
+
+## Complete Example
+
+Here's a complete end-to-end example combining frontend and backend:
+
+<Tabs>
+  <Tab title="Frontend (React)">
+    ```tsx app/components/Auth.tsx
+    import { useNearWallet } from 'near-connect-hooks';
+    import { useState, useEffect } from 'react';
+
+    const API_URL = 'https://api.myapp.com';
+
+    export function Auth() {
+      const { signNEP413Message, accountId, signOut } = useNearWallet();
+      const [isAuthenticated, setIsAuthenticated] = useState(false);
+      const [loading, setLoading] = useState(false);
+
+      useEffect(() => {
+        // Check if user has valid token
+        const token = localStorage.getItem('authToken');
+        if (token) {
+          // Verify token is still valid
+          fetch(`${API_URL}/auth/verify-token`, {
+            headers: { Authorization: `Bearer ${token}` },
+          })
+            .then((res) => res.ok && setIsAuthenticated(true))
+            .catch(() => localStorage.removeItem('authToken'));
+        }
+      }, []);
+
+      const handleLogin = async () => {
+        if (!accountId) return;
+
+        setLoading(true);
+        try {
+          // Step 1: Get challenge
+          const challengeRes = await fetch(`${API_URL}/auth/challenge`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountId }),
+          });
+          const { challenge, message, recipient } = await challengeRes.json();
+
+          // Step 2: Sign challenge
+          const signature = await signNEP413Message({
+            message,
+            recipient,
+            nonce: Buffer.from(challenge, 'base64'),
+          });
+
+          // Step 3: Verify signature
+          const verifyRes = await fetch(`${API_URL}/auth/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              accountId,
+              signature: signature.signature,
+              publicKey: signature.publicKey,
+            }),
+          });
+
+          const { token } = await verifyRes.json();
+          localStorage.setItem('authToken', token);
+          setIsAuthenticated(true);
+        } catch (error) {
+          console.error('Login failed:', error);
+          alert('Authentication failed');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      const handleLogout = () => {
+        localStorage.removeItem('authToken');
+        setIsAuthenticated(false);
+        signOut();
+      };
+
+      if (!accountId) {
+        return <p>Please connect your wallet first</p>;
+      }
+
+      if (isAuthenticated) {
+        return (
+          <div>
+            <p>Authenticated as {accountId}</p>
+            <button onClick={handleLogout}>Logout</button>
+          </div>
+        );
+      }
+
+      return (
+        <button onClick={handleLogin} disabled={loading}>
+          {loading ? 'Authenticating...' : 'Authenticate with NEAR'}
+        </button>
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Backend (Express)">
+    ```javascript server/auth.js
+    import express from 'express';
+    import { randomBytes } from 'crypto';
+    import { utils, providers } from 'near-api-js';
+    import bs58 from 'bs58';
+    import jwt from 'jsonwebtoken';
+    import Redis from 'ioredis';
+
+    const router = express.Router();
+    const redis = new Redis();
+    const JWT_SECRET = process.env.JWT_SECRET;
+
+    // Challenge endpoint
+    router.post('/challenge', async (req, res) => {
+      const { accountId } = req.body;
+      
+      const challenge = randomBytes(32);
+      const challengeB64 = challenge.toString('base64');
+      
+      await redis.setex(
+        `auth:challenge:${accountId}`,
+        300,
+        challengeB64
+      );
+      
+      res.json({
+        challenge: challengeB64,
+        message: 'Sign in to My App',
+        recipient: 'my-app.near',
+      });
+    });
+
+    // Verify endpoint
+    router.post('/verify', async (req, res) => {
+      const { accountId, signature, publicKey } = req.body;
+
+      try {
+        const storedChallenge = await redis.get(`auth:challenge:${accountId}`);
+        
+        if (!storedChallenge) {
+          return res.status(400).json({ error: 'Challenge not found' });
+        }
+
+        // Verify signature (implementation from previous example)
+        const isValid = await verifyNEP413Signature(
+          accountId,
+          signature,
+          publicKey,
+          storedChallenge
+        );
+
+        if (!isValid) {
+          return res.status(401).json({ error: 'Invalid signature' });
+        }
+
+        await redis.del(`auth:challenge:${accountId}`);
+
+        const token = jwt.sign(
+          { accountId, publicKey },
+          JWT_SECRET,
+          { expiresIn: '7d' }
+        );
+
+        res.json({ token, accountId });
+      } catch (error) {
+        console.error('Verification error:', error);
+        res.status(500).json({ error: 'Verification failed' });
+      }
+    });
+
+    // Token verification middleware
+    router.get('/verify-token', authenticateToken, (req, res) => {
+      res.json({ valid: true, accountId: req.accountId });
+    });
+
+    function authenticateToken(req, res, next) {
+      const token = req.headers.authorization?.split(' ')[1];
+      
+      if (!token) {
+        return res.status(401).json({ error: 'No token provided' });
+      }
+
+      jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+          return res.status(403).json({ error: 'Invalid token' });
+        }
+        req.accountId = decoded.accountId;
+        next();
+      });
+    }
+
+    export default router;
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Security Considerations
+
+<AccordionGroup>
+  <Accordion title="Challenge Expiration" icon="clock">
+    Always set a short expiration time (5-10 minutes) for challenges to prevent replay attacks. Store challenges with TTL in Redis or a similar cache.
+  </Accordion>
+
+  <Accordion title="One-Time Use" icon="shield-check">
+    Each challenge should only be used once. Delete the challenge immediately after successful verification.
+  </Accordion>
+
+  <Accordion title="Verify Public Key Ownership" icon="key">
+    Always verify that the public key used to sign the message actually belongs to the claimed account by querying the NEAR network.
+  </Accordion>
+
+  <Accordion title="Use HTTPS" icon="lock">
+    All authentication requests must be sent over HTTPS to prevent man-in-the-middle attacks.
+  </Accordion>
+
+  <Accordion title="Rate Limiting" icon="gauge">
+    Implement rate limiting on authentication endpoints to prevent brute force attacks.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Wallet Login" icon="wallet" href="/web3-apps/wallet-login">
+    Learn about frontend wallet integration
+  </Card>
+  
+  <Card title="Integrate Contracts" icon="code" href="/web3-apps/integrate-contracts">
+    Call smart contract methods from your app
+  </Card>
+  
+  <Card title="NEP-413 Standard" icon="book" href="https://github.com/near/NEPs/blob/master/neps/nep-0413.md">
+    Read the full NEP-413 specification
+  </Card>
+  
+  <Card title="Example Code" icon="github" href="https://github.com/near-examples/near-api-examples">
+    View complete authentication examples
+  </Card>
+</CardGroup>

@@ -1,0 +1,321 @@
+---
+title: 'Block / Chunk'
+description: 'Learn how to retrieve details about blocks and chunks from the RPC'
+---
+
+The RPC API enables you to query the network and get details about specific blocks or chunks.
+
+## Quick Reference
+
+| Method | Description | Parameters |
+|--------|-------------|------------|
+| [`block`](#block-details) | Get block details by height, hash, or finality | `finality` OR `block_id` |
+| [`block_effects`](#block-effects) | Get changes in a specific block | `finality` OR `block_id` |
+| [`chunk`](#chunk-details) | Get chunk details by chunk_id or block_id + shard_id | `chunk_id` OR [`block_id`, `shard_id`] |
+
+## Block details
+
+Queries network and returns block for given height or hash. You can also use `finality` param to return latest block details.
+
+<Note>
+You may choose to search by a specific block _or_ finality, you can not choose both.
+</Note>
+
+<ParamField query="method" type="string" required>
+  `block`
+</ParamField>
+
+<ParamField query="finality" type="string">
+  Block finality (`optimistic`, `near-final`, or `final`). See [finality param](/api/rpc/setup#using-finality-param).
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+### Query by finality
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "block",
+  "params": {
+    "finality": "final"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://test.rpc.fastnear.com",
+});
+
+const response = await provider.block({
+  finality: 'final',
+});
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=block \
+  params:='{
+    "finality": "final"
+  }'
+```
+</CodeGroup>
+
+### Query by block height
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "block",
+  "params": {
+    "block_id": 187310138
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://archival-rpc.testnet.near.org",
+});
+
+const response = await provider.block({
+  blockId: 187310138,
+});
+```
+
+```bash HTTPie
+http POST https://archival-rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=block \
+  params:='{
+    "block_id": 187310138
+  }'
+```
+</CodeGroup>
+
+### Query by block hash
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "block",
+  "params": {
+    "block_id": "6RWmTYhXCzjMjoY3Mz1rfFcnBm8E6XeDDbFEPUA4sv1w"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://archival-rpc.testnet.near.org",
+});
+
+const response = await provider.block({
+  blockId: '6RWmTYhXCzjMjoY3Mz1rfFcnBm8E6XeDDbFEPUA4sv1w',
+});
+```
+
+```bash HTTPie
+http POST https://archival-rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=block \
+  params:='{
+    "block_id": "6RWmTYhXCzjMjoY3Mz1rfFcnBm8E6XeDDbFEPUA4sv1w"
+  }'
+```
+</CodeGroup>
+
+For error handling information, see the [RPC Errors](/api/rpc/errors) documentation.
+
+## Block Effects
+
+Returns changes in block for given block height or hash over all transactions for all the types. Includes changes like `account_touched`, `access_key_touched`, `data_touched`, `contract_code_touched`. You can also use `finality` param to return latest block details.
+
+<Note>
+You may choose to search by a specific block _or_ finality, you can not choose both.
+</Note>
+
+<ParamField query="method" type="string" required>
+  `block_effects`
+</ParamField>
+
+<ParamField query="finality" type="string">
+  Block finality. See [finality param](/api/rpc/setup#using-finality-param).
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+<CodeGroup>
+```json JSON (by finality)
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "block_effects",
+  "params": {
+    "finality": "final"
+  }
+}
+```
+
+```json JSON (by height)
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "block_effects",
+  "params": {
+    "block_id": 187310138
+  }
+}
+```
+
+```json JSON (by hash)
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "block_effects",
+  "params": {
+    "block_id": "6RWmTYhXCzjMjoY3Mz1rfFcnBm8E6XeDDbFEPUA4sv1w"
+  }
+}
+```
+</CodeGroup>
+
+## Chunk Details
+
+Returns details of a specific chunk. You can run a [block details](#block-details) query to get a valid chunk hash.
+
+<ParamField query="method" type="string" required>
+  `chunk`
+</ParamField>
+
+<ParamField query="chunk_id" type="string">
+  Chunk hash
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+<ParamField query="shard_id" type="number">
+  Shard ID (required when using `block_id`)
+</ParamField>
+
+### Query by chunk_id
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "chunk",
+  "params": {
+    "chunk_id": "CzPafxtJmM1FnRoasKWAVhceJzZzkz9RKUBQQ4kY9V1v"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://archival-rpc.testnet.near.org",
+});
+
+const response = await provider.chunk(
+  'CzPafxtJmM1FnRoasKWAVhceJzZzkz9RKUBQQ4kY9V1v',
+);
+```
+
+```bash HTTPie
+http POST https://archival-rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=chunk \
+  params:='{
+    "chunk_id": "CzPafxtJmM1FnRoasKWAVhceJzZzkz9RKUBQQ4kY9V1v"
+  }'
+```
+</CodeGroup>
+
+### Query by block_id and shard_id
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "chunk",
+  "params": {
+    "block_id": 187310138,
+    "shard_id": 0
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://archival-rpc.testnet.near.org",
+});
+
+const response = await provider.chunk([187310138, 0]);
+```
+
+```bash HTTPie
+http POST https://archival-rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=chunk \
+  params:='{
+    "block_id": 187310138,
+    "shard_id": 0
+  }'
+```
+</CodeGroup>
+
+## Error Handling
+
+### Common Error Types
+
+| Error Code | Description | Solution |
+|------------|-------------|----------|
+| `UNKNOWN_BLOCK` | Block not found or garbage-collected | Check block validity; use archival node for old blocks |
+| `UNKNOWN_CHUNK` | Chunk not found in database | Verify chunk ID; use archival node for old chunks |
+| `INVALID_SHARD_ID` | Shard ID does not exist | Provide valid shard ID for existing shard |
+| `NOT_SYNCED_YET` | Node still syncing | Wait for sync completion or use different node |
+| `PARSE_ERROR` | Invalid request parameters | Check parameter format and completeness |
+| `INTERNAL_ERROR` | Server-side issue | Retry request or try different RPC endpoint |
+
+### Response Validation
+
+- **Block responses**: Always include `block_hash`, `block_height`, and `header` fields
+- **Chunk responses**: Contain `author`, `header`, `receipts`, and `transactions` arrays
+- **Changes responses**: Include `block_hash` and `block_effects` array with change details
+
+## Best Practices
+
+- **Cache block data**: Block information is immutable once finalized, ideal for caching
+- **Use archival nodes for old data**: Blocks older than 5 epochs require archival nodes
+- **Validate shard IDs**: Ensure shard IDs are within the network's shard range

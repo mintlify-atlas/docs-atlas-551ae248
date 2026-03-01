@@ -1,0 +1,148 @@
+---
+title: What is a Smart Contract?
+description: Learn about smart contracts on NEAR - executable code that lives in accounts, stores data, and enables decentralized applications.
+---
+
+Smart contracts are pieces of **executable code** that live in a NEAR account. They can **store data**, **perform transactions** in the account's name, and **expose methods** so other accounts can interact with them.
+
+<Frame>
+  <img src="/images/smart-contracts-overview.png" alt="Smart Contracts Overview" />
+</Frame>
+
+Developers can choose between using JavaScript or Rust to write smart contracts in NEAR. Regardless of the language chosen, the contract will be compiled into WebAssembly, from which point it can be deployed and executed on the NEAR platform.
+
+<Note>
+**New to Smart Contract Development?**
+
+If you don't know how smart-contract blockchains work, understand that NEAR smart contracts:
+1. Have **limited** computational resources
+2. Interact with other contracts in an **asynchronous** way
+3. Deal with **real money**, for which security must be a top concern
+</Note>
+
+---
+
+## Where Do Contracts Live?
+
+Smart contracts are deployed into [**NEAR accounts**](/protocol/account-model). Any NEAR account can hold a contract, needing to pay for the **contract's code** and the **data it stores**.
+
+Once in an account, anyone can interact with the contract. Thanks to the underlying network structure, executing code from a contract is both **fast** (avg. 1.4s finality) and **cheap**. Moreover, **read-only** operations are **free for everyone**.
+
+<Info>
+Storing 100kb costs 1Ⓝ, so deploying a contract generally costs only a few $NEARs.
+</Info>
+
+---
+
+## What Can They Do?
+
+Smart contracts have **complete control over the account**, and thus can perform **any action on its behalf**. For example, contracts can:
+
+<CardGroup cols={2}>
+  <Card title="Transfer $NEAR Tokens" icon="coins">
+    Send NEAR tokens to other accounts
+  </Card>
+  <Card title="Call Other Contracts" icon="network-wired">
+    Execute methods on other deployed contracts
+  </Card>
+  <Card title="Create Accounts" icon="user-plus">
+    Create new accounts and deploy contracts on them
+  </Card>
+  <Card title="Update Code" icon="code">
+    Update their own code programmatically
+  </Card>
+</CardGroup>
+
+Besides, smart contracts can store data in the account's storage. This allows contracts to create almost any type of application, from simple games to complex financial systems.
+
+<Warning>
+**What Contracts Cannot Do**
+- Smart contracts cannot **access the internet**, so they cannot make HTTP requests or access external data
+- Smart contracts cannot **execute automatically**, they need to be called by an external account
+</Warning>
+
+---
+
+## What Are They Used For?
+
+Smart contracts are useful to create **decentralized applications**. Some traditional examples include:
+
+- **Decentralized Autonomous Organizations (DAOs)** - where users create and vote on proposals
+- **Marketplaces** - where users create and commercialize digital art pieces  
+- **Decentralized Exchanges (DEXs)** - where users can trade different currencies
+- **DeFi Protocols** - lending, borrowing, and yield farming platforms
+- **NFT Projects** - collectibles, games, and digital art
+
+For instance, you can easily create a crowdfunding contract that accepts $NEAR. If the goal is met in time, the creator can claim the funds. Otherwise, the backers are refunded.
+
+---
+
+## Development Flow
+
+Just like any piece of software, smart contracts have a development flow - starting with creation and ending with monitoring.
+
+<Steps>
+  <Step title="Scaffold">
+    The simplest way to create a project is by starting from a template. See [Quickstart](/smart-contracts/quickstart).
+  </Step>
+  <Step title="Build">
+    Write a contract using Rust or JavaScript. Learn about [Contract Anatomy](/smart-contracts/anatomy).
+  </Step>
+  <Step title="Test">
+    Our Sandbox enables simulating interactions with contracts in a realistic environment. See [Testing](/smart-contracts/testing).
+  </Step>
+  <Step title="Deploy">
+    After ensuring the contract is secure, deploy it into your account. See [Deployment](/smart-contracts/deploy).
+  </Step>
+  <Step title="Use">
+    Any user can interact with the contract through their NEAR Wallet.
+  </Step>
+  <Step title="Monitor">
+    The contract's activity can be monitored through APIs and indexers.
+  </Step>
+</Steps>
+
+### Supported Languages
+
+During the whole cycle, developers can choose between **JavaScript** and **Rust**, allowing them to use their favorite language at each step of their journey.
+
+<Tip>
+Rust is recommended for production apps due to its mature tooling and better performance. JavaScript is great for prototyping and learning.
+</Tip>
+
+<Note>
+**Other Languages**
+
+Theoretically, you can use any language that compiles to WebAssembly for developing NEAR smart contracts. However, to have a user-friendly experience, you need a library that wraps around low-level runtime APIs while offering high-level functionalities.
+
+We envision that in the future, more languages will be supported through community efforts.
+</Note>
+
+---
+
+## Contract Primitives
+
+Contract primitives such as FT (Fungible Tokens), NFT (Non-Fungible Tokens), and DAOs are fundamental building blocks that can be combined to create awesome user experiences such as reward tokens, decision-making tools, and marketplaces.
+
+<Card title="Learn About Primitives" icon="cube" href="/primitives/what-is">
+  Explore NEAR's contract primitives and standards
+</Card>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/smart-contracts/quickstart">
+    Build your first smart contract in minutes
+  </Card>
+  <Card title="Contract Anatomy" icon="microscope" href="/smart-contracts/anatomy">
+    Understand how smart contracts work
+  </Card>
+  <Card title="Testing" icon="flask" href="/smart-contracts/testing">
+    Learn how to test your contracts
+  </Card>
+  <Card title="Security" icon="shield" href="/smart-contracts/security">
+    Best practices for secure contracts
+  </Card>
+</CardGroup>

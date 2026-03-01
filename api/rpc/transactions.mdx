@@ -1,0 +1,288 @@
+---
+title: 'Transactions'
+description: 'Send transactions and query their status using the RPC'
+---
+
+The RPC API enables you to send transactions and query their status on the NEAR blockchain. This includes sending new transactions, checking transaction status, retrieving receipts, and monitoring transaction execution.
+
+## Quick Reference
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| [`send_tx`](#send-tx) | `signed_tx_base64`, `wait_until` | Send a transaction and optionally wait for execution |
+| [`tx`](#transaction-status) | `tx_hash`, `sender_account_id`, `wait_until` | Query transaction status by hash |
+| [`EXPERIMENTAL_tx_status`](#transaction-status-with-receipts) | `tx_hash`, `sender_account_id`, `wait_until` | Query transaction status with receipt details |
+| [`EXPERIMENTAL_receipt`](#receipt-by-id) | `receipt_id` | Fetch receipt by ID |
+| [`broadcast_tx_async`](#send-transaction-async) | `signed_tx_base64` | (Deprecated) Send transaction asynchronously |
+| [`broadcast_tx_commit`](#send-transaction-await) | `signed_tx_base64` | (Deprecated) Send transaction and wait for completion |
+
+## Send transaction
+
+Sends transaction. Returns the guaranteed execution status and the results the blockchain can provide at the moment.
+
+<ParamField query="method" type="string" required>
+  `send_tx`
+</ParamField>
+
+<ParamField query="signed_tx_base64" type="string" required>
+  SignedTransaction encoded in base64
+</ParamField>
+
+<ParamField query="wait_until" type="string">
+  The required minimal execution level. Default value is `EXECUTED_OPTIMISTIC`. [Read more here](#tx-status-result).
+</ParamField>
+
+<Note>
+Using `send_tx` with `wait_until = NONE` is equal to legacy `broadcast_tx_async` method.
+Using `send_tx` with `wait_until = EXECUTED_OPTIMISTIC` is equal to legacy `broadcast_tx_commit` method.
+</Note>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "send_tx",
+  "params": {
+    "signed_tx_base64": "DgAAAHNlbmRlci50ZXN0bmV0AOrmAai64SZOv9e/naX4W15pJx0GAap35wTT1T/DwcbbDwAAAAAAAAAQAAAAcmVjZWl2ZXIudGVzdG5ldNMnL7URB1cxPOu3G8jTqlEwlcasagIbKlAJlF5ywVFLAQAAAAMAAACh7czOG8LTAAAAAAAAAGQcOG03xVSFQFjoagOb4NBBqWhERnnz45LY4+52JgZhm1iQKz7qAdPByrGFDQhQ2Mfga8RlbysuQ8D8LlA6bQE=",
+    "wait_until": "INCLUDED_FINAL"
+  }
+}
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=send_tx \
+  params:='{
+    "signed_tx_base64": "DgAAAHNlbmRlci50ZXN0bmV0AOrmAai64SZOv9e/naX4W15pJx0GAap35wTT1T/DwcbbDwAAAAAAAAAQAAAAcmVjZWl2ZXIudGVzdG5ldNMnL7URB1cxPOu3G8jTqlEwlcasagIbKlAJlF5ywVFLAQAAAAMAAACh7czOG8LTAAAAAAAAAGQcOG03xVSFQFjoagOb4NBBqWhERnnz45LY4+52JgZhm1iQKz7qAdPByrGFDQhQ2Mfga8RlbysuQ8D8LlA6bQE=",
+    "wait_until": "EXECUTED"
+  }'
+```
+</CodeGroup>
+
+## Transaction Status
+
+Queries status of a transaction by hash and returns the final transaction result.
+
+<ParamField query="method" type="string" required>
+  `tx`
+</ParamField>
+
+<ParamField query="tx_hash" type="string" required>
+  Transaction hash (see [NearBlocks Explorer](https://testnet.nearblocks.io) for valid hashes)
+</ParamField>
+
+<ParamField query="sender_account_id" type="string" required>
+  Used to determine which shard to query for transaction
+</ParamField>
+
+<ParamField query="wait_until" type="string">
+  The required minimal execution level. Default is `EXECUTED_OPTIMISTIC`. [Read more here](#tx-status-result).
+</ParamField>
+
+<Info>
+A Transaction status request with `wait_until != NONE` will wait until the transaction appears on the blockchain. If the transaction does not exist, the method will wait until the timeout is reached. If you only need to check whether the transaction exists, use `wait_until = NONE`, it will return the response immediately.
+</Info>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "tx",
+  "params": {
+    "tx_hash": "7AfonAhbK4ZbdBU9VPcQdrTZVZBXE25HmZAMEABs9To1",
+    "sender_account_id": "rpc-examples.testnet",
+    "wait_until": "FINAL"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://archival-rpc.testnet.near.org",
+});
+
+const response = await provider.txStatus(
+  '7AfonAhbK4ZbdBU9VPcQdrTZVZBXE25HmZAMEABs9To1',
+  'rpc-examples.testnet',
+  'FINAL',
+);
+```
+
+```bash HTTPie
+http POST https://archival-rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=tx \
+  params:='{
+    "tx_hash": "7AfonAhbK4ZbdBU9VPcQdrTZVZBXE25HmZAMEABs9To1",
+    "sender_account_id": "rpc-examples.testnet",
+    "wait_until": "FINAL"
+  }'
+```
+</CodeGroup>
+
+## Transaction Status with Receipts
+
+Queries status of a transaction by hash, returning the final transaction result _and_ details of all receipts.
+
+<ParamField query="method" type="string" required>
+  `EXPERIMENTAL_tx_status`
+</ParamField>
+
+<ParamField query="tx_hash" type="string" required>
+  Transaction hash
+</ParamField>
+
+<ParamField query="sender_account_id" type="string" required>
+  Used to determine which shard to query for transaction
+</ParamField>
+
+<ParamField query="wait_until" type="string">
+  The required minimal execution level. Default is `EXECUTED_OPTIMISTIC`.
+</ParamField>
+
+## Receipt by ID
+
+Fetches a receipt by its ID (as is, without a status or execution outcome).
+
+<ParamField query="method" type="string" required>
+  `EXPERIMENTAL_receipt`
+</ParamField>
+
+<ParamField query="receipt_id" type="string" required>
+  Receipt ID (see [NearBlocks Explorer](https://testnet.nearblocks.io) for valid receipt IDs)
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "EXPERIMENTAL_receipt",
+  "params": {
+    "receipt_id": "23r1wWsMAVtZysr9wNV6TCSdZTUyPbhBZ3McJ6zStpaE"
+  }
+}
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=EXPERIMENTAL_receipt \
+  params:='{"receipt_id": "23r1wWsMAVtZysr9wNV6TCSdZTUyPbhBZ3McJ6zStpaE"}'
+```
+</CodeGroup>
+
+## Transaction Execution Levels
+
+All the methods listed above have `wait_until` request parameter, and `final_execution_status` response value. They correspond to the same enum `TxExecutionStatus`. See the detailed explanation for all the options:
+
+```rust
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum TxExecutionStatus {
+  /// Transaction is waiting to be included into the block
+  None,
+  /// Transaction is included into the block. The block may be not finalized yet
+  Included,
+  /// Transaction is included into the block +
+  /// All non-refund transaction receipts finished their execution.
+  /// The corresponding blocks for tx and each receipt may be not finalized yet
+  #[default]
+  ExecutedOptimistic,
+  /// Transaction is included into finalized block
+  IncludedFinal,
+  /// Transaction is included into finalized block +
+  /// All non-refund transaction receipts finished their execution.
+  /// The corresponding blocks for each receipt may be not finalized yet
+  Executed,
+  /// Transaction is included into finalized block +
+  /// Execution of all transaction receipts is finalized, including refund receipts
+  Final,
+}
+```
+
+<Expandable title="Waiting for a Transaction">
+
+When a transaction is submitted, it first gets validated by the RPC node. If the transaction fails structural checks it will be immediately rejected. Otherwise, it enters the following lifecycle:
+
+1. The transaction has been accepted by the RPC node and is waiting to be included in a block. If `wait_until = None`, the RPC will return a response at this stage. The transaction hasn't started executing yet, though it will typically start in the next block.
+
+2. Once the transaction reaches a validator, it ensures a signature matches signer access key and that the account is charged gas pre-payment, then updates access key nonce. The transaction is included in a chunk/block and converted into a single receipt for execution. If `wait_until = Included`, the RPC returns a response immediately indicating that the transaction has just started the execution (no execution results, logs, and outcomes are available at this point).
+
+3. In the next blocks, the receipt will get executed and it may produce more receipts for cross-contract interactions. Once all receipts finish the execution, RPC returns a response if `wait_until = ExecutedOptimistic`.
+
+4. The block that contains the transaction has been finalized. This may occur even sooner than receipts execution finishes (depending on how many cross-contract interactions there), and when it finishes, the RPC returns a response if `wait_until = IncludedFinal`.
+
+5. Once the block that contains the transaction has been finalized and all receipts have completed execution (both `IncludedFinal` and `ExecutedOptimistic` are satisfied), then RPC returns a response if `wait_until = Executed`.
+
+6. Once blocks containing the transaction and all of its receipts are finalized, the RPC returns a response at this point if `wait_until = Final`.
+
+</Expandable>
+
+## Deprecated methods
+
+### [deprecated] Send transaction (async)
+
+<Warning>
+Consider using [`send_tx`](#send-tx) instead.
+</Warning>
+
+Sends a transaction and immediately returns transaction hash.
+
+<ParamField query="method" type="string" required>
+  `broadcast_tx_async`
+</ParamField>
+
+<ParamField query="params" type="array" required>
+  `[SignedTransaction encoded in base64]`
+</ParamField>
+
+### [deprecated] Send transaction (await)
+
+<Warning>
+Consider using [`send_tx`](#send-tx) instead.
+</Warning>
+
+Sends a transaction and waits until transaction is fully complete. _(Has a 10 second timeout)_
+
+<ParamField query="method" type="string" required>
+  `broadcast_tx_commit`
+</ParamField>
+
+<ParamField query="params" type="array" required>
+  `[SignedTransaction encoded in base64]`
+</ParamField>
+
+## Error Handling
+
+### Common Error Types
+
+| Error Code | Description | Solution |
+|------------|-------------|----------|
+| `UnknownTransaction` | Transaction not found | Verify transaction hash and sender account |
+| `TimeoutError` | Transaction timeout | Use appropriate wait_until parameter or retry |
+| `InvalidTransaction` | Invalid transaction format | Check transaction structure and signature |
+| `InvalidAccount` | Invalid account format | Use valid account ID format (e.g., `account.near`) |
+| `InsufficientStake` | Not enough stake for operation | Ensure account has sufficient NEAR tokens |
+| `MethodNotFound` | Invalid method name | Check method spelling and API version |
+| `ParseError` | JSON parsing error | Verify JSON format and structure |
+| `ServerError` | Internal server error | Retry request or use different RPC endpoint |
+
+## Best Practices
+
+- **Use appropriate wait_until levels**: Choose the right execution level based on your requirements
+  - `NONE`: For fire-and-forget scenarios
+  - `INCLUDED`: When you need confirmation the transaction is in a block
+  - `EXECUTED_OPTIMISTIC`: For most use cases (default)
+  - `FINAL`: When you need absolute finality guarantees
+
+- **Handle timeouts gracefully**: Implement proper timeout handling and retry logic
+- **Monitor gas usage**: Track gas consumption to optimize transaction costs
+- **Batch operations**: When possible, batch multiple actions in a single transaction

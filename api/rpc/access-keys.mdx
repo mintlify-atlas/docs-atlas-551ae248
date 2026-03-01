@@ -1,0 +1,380 @@
+---
+title: 'Access Keys'
+description: 'Learn how to retrieve and track NEAR account access keys using the RPC'
+---
+
+The RPC API enables you to retrieve information about an account's access keys. Access keys are cryptographic keys that allow actions to be performed on behalf of an account, with different permission levels for security.
+
+## Access Key Types
+
+- **Full Access Keys**: Can perform any action on the account, including deploying contracts, managing other keys, and transferring funds
+- **Function Call Keys**: Restricted to calling specific contract methods with limited allowance for gas fees
+
+## Quick Reference
+
+| Method | Endpoint | Purpose |
+|--------|----------|----------|
+| [`view_access_key`](#view-access-key) | Query single key | Get details of a specific access key |
+| [`view_access_key_list`](#view-access-key-list) | Query all keys | List all access keys for an account |
+| [`single_access_key_changes`](#view-access-key-changes-single) | Track specific changes | Monitor changes to specific keys |
+| [`all_access_key_changes`](#view-access-key-changes-all) | Track all changes | Monitor all key changes for accounts |
+
+## View access key
+
+Returns information about a single access key for a given account.
+
+If `permission` of the key is `FunctionCall`, it will return more details such as the `allowance`, `receiver_id`, and `method_names`.
+
+<ParamField query="method" type="string" required>
+  `query`
+</ParamField>
+
+<ParamField query="request_type" type="string" required>
+  `view_access_key`
+</ParamField>
+
+<ParamField query="finality" type="string">
+  Block finality (`optimistic`, `near-final`, or `final`). See [finality param](/api/rpc/setup#using-finality-param).
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+<ParamField query="account_id" type="string" required>
+  Example: `"example.testnet"`
+</ParamField>
+
+<ParamField query="public_key" type="string" required>
+  Example: `"ed25519:..."`
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "query",
+  "params": {
+    "request_type": "view_access_key",
+    "finality": "final",
+    "account_id": "account.rpc-examples.testnet",
+    "public_key": "ed25519:EddTahJwZpJjYPPmat7DBm1m2vdrFBzVv7e3T4hzkENd"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://test.rpc.fastnear.com",
+});
+
+const response = await provider.query({
+    request_type: 'view_access_key',
+    finality: 'final',
+    account_id: 'account.rpc-examples.testnet',
+    public_key: 'ed25519:EddTahJwZpJjYPPmat7DBm1m2vdrFBzVv7e3T4hzkENd',
+});
+
+console.log(response);
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=query \
+  params:='{
+    "request_type": "view_access_key",
+    "finality": "final",
+    "account_id": "account.rpc-examples.testnet",
+    "public_key": "ed25519:EddTahJwZpJjYPPmat7DBm1m2vdrFBzVv7e3T4hzkENd"
+  }'
+```
+</CodeGroup>
+
+<ResponseExample>
+```json Example Response
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "block_hash": "J1zkrK8sHuzzV8pkXsEPrZH7SQZeJ2NSEs9L1hSWzVgg",
+    "block_height": 187316844,
+    "nonce": 187309654000001,
+    "permission": {
+      "FunctionCall": {
+        "allowance": "149788200694421800000000",
+        "method_names": [
+          "write_record",
+          "get_record",
+          "get_greeting",
+          "__contract_abi",
+          "contract_source_metadata"
+        ],
+        "receiver_id": "contract.rpc-examples.testnet"
+      }
+    }
+  },
+  "id": "dontcare"
+}
+```
+</ResponseExample>
+
+For error handling information, see the [RPC Errors](/api/rpc/errors) documentation.
+
+## View access key list
+
+Returns all access keys for a given account.
+
+<ParamField query="method" type="string" required>
+  `query`
+</ParamField>
+
+<ParamField query="request_type" type="string" required>
+  `view_access_key_list`
+</ParamField>
+
+<ParamField query="finality" type="string">
+  Block finality (`optimistic`, `near-final`, or `final`). See [finality param](/api/rpc/setup#using-finality-param).
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+<ParamField query="account_id" type="string" required>
+  Example: `"example.testnet"`
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "query",
+  "params": {
+    "request_type": "view_access_key_list",
+    "finality": "final",
+    "account_id": "account.rpc-examples.testnet"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://test.rpc.fastnear.com",
+});
+
+const response = await provider.query({
+  request_type: 'view_access_key_list',
+  finality: 'final',
+  account_id: 'account.rpc-examples.testnet',
+});
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id="dontcare" \
+  method=query \
+  params:='{
+    "request_type": "view_access_key_list",
+    "finality": "final",
+    "account_id": "account.rpc-examples.testnet"
+  }'
+```
+</CodeGroup>
+
+<ResponseExample>
+```json Example Response
+{
+  "jsonrpc": "2.0",
+  "result": {
+    "block_hash": "29G6xeV4ufkVsY24YZPfiRwLMTNoKrAMitrjg6nvVZqq",
+    "block_height": 187319080,
+    "keys": [
+      {
+        "access_key": {
+          "nonce": 187309654000000,
+          "permission": "FullAccess"
+        },
+        "public_key": "ed25519:vJBU18AtvePANmepMoY3rtV3wt1RHwqoktak82E4d2M"
+      },
+      {
+        "access_key": {
+          "nonce": 187309654000001,
+          "permission": {
+            "FunctionCall": {
+              "allowance": "149788200694421800000000",
+              "method_names": [
+                "write_record",
+                "get_record",
+                "get_greeting",
+                "__contract_abi",
+                "contract_source_metadata"
+              ],
+              "receiver_id": "contract.rpc-examples.testnet"
+            }
+          }
+        },
+        "public_key": "ed25519:EddTahJwZpJjYPPmat7DBm1m2vdrFBzVv7e3T4hzkENd"
+      }
+    ]
+  },
+  "id": "dontcare"
+}
+```
+</ResponseExample>
+
+## View access key changes (single)
+
+Returns individual access key changes in a specific block. You can query multiple keys by passing an array of objects containing the `account_id` and `public_key`.
+
+<ParamField query="method" type="string" required>
+  `changes`
+</ParamField>
+
+<ParamField query="changes_type" type="string" required>
+  `single_access_key_changes`
+</ParamField>
+
+<ParamField query="keys" type="array" required>
+  Array of objects: `[{ account_id, public_key }]`
+</ParamField>
+
+<ParamField query="finality" type="string">
+  Block finality. See [finality param](/api/rpc/setup#using-finality-param).
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "changes",
+  "params": {
+    "changes_type": "single_access_key_changes",
+    "keys": [
+      {
+        "account_id": "account.rpc-examples.testnet",
+        "public_key": "ed25519:EddTahJwZpJjYPPmat7DBm1m2vdrFBzVv7e3T4hzkENd"
+      }
+    ],
+    "block_id": "6RWmTYhXCzjMjoY3Mz1rfFcnBm8E6XeDDbFEPUA4sv1w"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://archival-rpc.testnet.near.org",
+});
+
+const response = await provider.singleAccessKeyChanges(
+  [
+    {
+      account_id: 'account.rpc-examples.testnet',
+      public_key: 'ed25519:EddTahJwZpJjYPPmat7DBm1m2vdrFBzVv7e3T4hzkENd',
+    },
+  ],
+  { blockId: '6RWmTYhXCzjMjoY3Mz1rfFcnBm8E6XeDDbFEPUA4sv1w' },
+);
+```
+
+```bash HTTPie
+http POST https://archival-rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=changes \
+  params:='{
+    "changes_type": "single_access_key_changes",
+    "keys": [
+      {
+        "account_id": "account.rpc-examples.testnet",
+        "public_key": "ed25519:EddTahJwZpJjYPPmat7DBm1m2vdrFBzVv7e3T4hzkENd"
+      }
+    ],
+    "block_id": "6RWmTYhXCzjMjoY3Mz1rfFcnBm8E6XeDDbFEPUA4sv1w"
+  }'
+```
+</CodeGroup>
+
+## View access key changes (all)
+
+Returns changes to **all** access keys of a specific block. Multiple accounts can be queried by passing an array of `account_ids`.
+
+<ParamField query="method" type="string" required>
+  `changes`
+</ParamField>
+
+<ParamField query="changes_type" type="string" required>
+  `all_access_key_changes`
+</ParamField>
+
+<ParamField query="account_ids" type="array" required>
+  Example: `["example.testnet", "example2.testnet"]`
+</ParamField>
+
+<ParamField query="finality" type="string">
+  Block finality. See [finality param](/api/rpc/setup#using-finality-param).
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "changes",
+  "params": {
+    "changes_type": "all_access_key_changes",
+    "account_ids": ["account.rpc-examples.testnet"],
+    "block_id": 187309655
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://archival-rpc.testnet.near.org",
+});
+
+const response = await provider.accessKeyChanges(['account.rpc-examples.testnet'], {
+  blockId: 187309655,
+});
+```
+
+```bash HTTPie
+http POST https://archival-rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=changes \
+  params:='{
+    "changes_type": "all_access_key_changes",
+    "account_ids": ["account.rpc-examples.testnet"],
+    "block_id": 187309655
+  }'
+```
+</CodeGroup>
+
+## Best Practices
+
+- **Use specific queries**: Use `view_access_key` when you know the exact key instead of listing all keys
+- **Cache results**: Access key information does not change frequently, consider caching
+- **Batch operations**: When checking multiple keys, use `single_access_key_changes` with multiple keys
+- **Archival nodes**: Only use archival endpoints when historical data is required

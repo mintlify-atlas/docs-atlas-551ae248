@@ -1,0 +1,357 @@
+---
+title: Contract Anatomy
+description: Learn the basic anatomy of NEAR smart contracts, including structure, state management, and function types.
+---
+
+Let's explore the basic anatomy of a simple "Hello World" contract to understand how NEAR smart contracts are structured.
+
+## Importing the SDK
+
+All contracts import the **NEAR SDK**, enabling them to access the execution environment, call other contracts, transfer tokens, and much more.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::near;
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, near, call, view } from 'near-sdk-js';
+    ```
+  </Tab>
+</Tabs>
+
+You can also use third-party libraries, though some might not work due to the limitations of the contract runtime.
+
+---
+
+## Contract Structure
+
+The contract is described through a structure:
+- The **attributes** define which data the contract stores
+- The **functions** define its public (and private) interface
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::near;
+
+    #[near(contract_state)]
+    pub struct Contract {
+        greeting: String,
+    }
+
+    #[near]
+    impl Contract {
+        #[init]
+        pub fn new() -> Self {
+            Self {
+                greeting: "Hello".to_string(),
+            }
+        }
+
+        pub fn get_greeting(&self) -> String {
+            self.greeting.clone()
+        }
+
+        pub fn set_greeting(&mut self, greeting: String) {
+            self.greeting = greeting;
+        }
+    }
+    ```
+
+    <Note>
+    **Contract Struct Macro**
+
+    The `#[near(contract_state)]` macro tells the SDK that this structure defines the contract's state, so it knows:
+    1. What to fetch from storage when the contract is loaded
+    2. What to store when the contract is done executing
+
+    The `#[near]` macro tells the SDK which functions are exposed to the outside world.
+
+    **Note:** Only one struct can be decorated with the `#[near(contract_state)]` macro.
+    </Note>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, near, call, view } from 'near-sdk-js';
+
+    @NearBindgen({})
+    class HelloContract {
+      greeting: string = "Hello";
+
+      schema = {
+        greeting: "string"
+      };
+
+      @view({})
+      get_greeting(): string {
+        return this.greeting;
+      }
+
+      @call({})
+      set_greeting({ greeting }: { greeting: string }): void {
+        near.log(`Saving greeting: ${greeting}`);
+        this.greeting = greeting;
+      }
+    }
+    ```
+
+    <Note>
+    **Contract Class Decorator**
+
+    The `@NearBindgen` decorator tells the SDK which class defines the contract, so it knows:
+    1. What to fetch from storage when the contract is loaded
+    2. What to store when the contract is done executing
+    3. The methods that are exposed to the outside world
+    4. If the contract needs to be initialized
+
+    **Note:** Only one class can be decorated with the `@NearBindgen` decorator.
+    </Note>
+
+    <Info>
+    JavaScript contracts need to include a `schema` object that defines the contract's state and its types. This object is used by the SDK to correctly serialize and deserialize the contract's state.
+    </Info>
+  </Tab>
+</Tabs>
+
+---
+
+## Storage (State)
+
+We call the data stored in the contract **the contract's state**.
+
+In our Hello World example, the contract stores a single string (`greeting`), and the state starts initialized with the default value `"Hello"`.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[near(contract_state)]
+    pub struct Contract {
+        greeting: String,  // This field is stored in the contract's state
+    }
+
+    impl Default for Contract {
+        fn default() -> Self {
+            Self {
+                greeting: "Hello".to_string(),
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class HelloContract {
+      greeting: string = "Hello";  // Default value
+
+      schema = {
+        greeting: "string"  // Type definition
+      };
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Card title="Learn More About State" icon="database" href="/smart-contracts/storage">
+  Deep dive into contract state management and storage
+</Card>
+
+---
+
+## Read-Only Functions
+
+Contract functions can be read-only, meaning they don't modify the state. Calling them is **free for everyone**, and does not require having a NEAR account.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    // Read-only functions take an immutable reference to self
+    pub fn get_greeting(&self) -> String {
+        self.greeting.clone()
+    }
+    ```
+
+    <Info>
+    In Rust, read-only functions are those that take an **immutable** reference to `self` (`&self`).
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Read-only functions are marked with @view
+    @view({})
+    get_greeting(): string {
+      return this.greeting;
+    }
+    ```
+
+    <Info>
+    In JavaScript, read-only functions are marked with the `@view({})` decorator.
+    </Info>
+  </Tab>
+</Tabs>
+
+<Card title="Learn More About Functions" icon="function" href="/smart-contracts/functions">
+  Explore all function types and their use cases
+</Card>
+
+---
+
+## State-Changing Functions
+
+Functions that modify the state or call other contracts are considered state-changing functions. It is necessary to have a NEAR account to call them, as they require a transaction to be sent to the network.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    // State-changing functions take a mutable reference to self
+    pub fn set_greeting(&mut self, greeting: String) {
+        near_sdk::log!("Saving greeting: {}", greeting);
+        self.greeting = greeting;
+    }
+    ```
+
+    <Info>
+    In Rust, state-changing functions are those that take a **mutable** reference to `self` (`&mut self`).
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // State-changing functions are marked with @call
+    @call({})
+    set_greeting({ greeting }: { greeting: string }): void {
+      near.log(`Saving greeting: ${greeting}`);
+      this.greeting = greeting;
+    }
+    ```
+
+    <Info>
+    In JavaScript, state-changing functions are marked with the `@call({})` decorator.
+    </Info>
+  </Tab>
+</Tabs>
+
+---
+
+## Contextual Information
+
+The SDK provides contextual information about the execution environment, such as:
+
+- **Who called the function** - `predecessor_account_id`
+- **Current block timestamp** - `block_timestamp`
+- **Attached deposit** - `attached_deposit`
+- **Available gas** - `prepaid_gas`
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{env, AccountId, Balance};
+
+    pub fn get_caller(&self) -> AccountId {
+        env::predecessor_account_id()
+    }
+
+    pub fn get_timestamp(&self) -> u64 {
+        env::block_timestamp()
+    }
+
+    #[payable]
+    pub fn get_deposit(&self) -> Balance {
+        env::attached_deposit().as_yoctonear()
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { near } from 'near-sdk-js';
+
+    @view({})
+    get_caller(): string {
+      return near.predecessorAccountId();
+    }
+
+    @view({})
+    get_timestamp(): string {
+      return near.blockTimestamp();
+    }
+
+    @call({ payableFunction: true })
+    get_deposit(): string {
+      return near.attachedDeposit().toString();
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Internal Functions
+
+Contracts can also have private internal functions - such as helper or utility functions - that are **not exposed** to the outside world.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[near]
+    impl Contract {
+        // Public function - exposed to external callers
+        pub fn increment(&mut self) {
+            self.internal_increment();
+        }
+
+        // Private function - not exposed externally
+        fn internal_increment(&mut self) {
+            self.counter += 1;
+        }
+    }
+    ```
+
+    <Info>
+    To create internal private methods in Rust, do not declare them as public (`pub fn`).
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      counter: number = 0;
+
+      // Public function - exposed to external callers
+      @call({})
+      increment(): void {
+        this.internal_increment();
+      }
+
+      // Private function - not exposed externally
+      internal_increment(): void {
+        this.counter += 1;
+      }
+    }
+    ```
+
+    <Info>
+    To create internal private methods in JavaScript, simply omit the `@view` and `@call` decorators.
+    </Info>
+  </Tab>
+</Tabs>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Functions" icon="function" href="/smart-contracts/functions">
+    Learn about all function types
+  </Card>
+  <Card title="Storage" icon="database" href="/smart-contracts/storage">
+    Understand state management
+  </Card>
+  <Card title="Cross-Contract Calls" icon="network-wired" href="/smart-contracts/crosscontract">
+    Call other contracts
+  </Card>
+  <Card title="Testing" icon="flask" href="/smart-contracts/testing">
+    Test your contracts
+  </Card>
+</CardGroup>

@@ -1,0 +1,386 @@
+---
+title: NFT zero to hero tutorial
+description: Master NEAR NFTs by building a complete NFT contract from scratch
+---
+
+Learn everything about non-fungible tokens (NFTs) on NEAR by building a fully-featured NFT smart contract from the ground up.
+
+## Overview
+
+This comprehensive tutorial series takes you from deploying a pre-built NFT contract to implementing every standard extension. By the end, you'll have a production-ready NFT contract.
+
+<CardGroup cols={1}>
+  <Card title="NFT Tutorial Series" icon="graduation-cap" href="https://near-examples.github.io/nft-tutorial/">
+    Complete step-by-step NFT tutorial
+  </Card>
+</CardGroup>
+
+## What you'll learn
+
+<CardGroup cols={2}>
+  <Card title="NEP-171 Core" icon="gem">
+    The foundational NFT standard for minting and transferring tokens
+  </Card>
+  
+  <Card title="NEP-177 Metadata" icon="tag">
+    Add metadata like names, descriptions, and images to NFTs
+  </Card>
+  
+  <Card title="NEP-178 Approval" icon="check">
+    Allow marketplaces to transfer NFTs on behalf of owners
+  </Card>
+  
+  <Card title="NEP-181 Enumeration" icon="list">
+    Query NFTs by owner, paginate results, and more
+  </Card>
+  
+  <Card title="NEP-199 Royalties" icon="percent">
+    Implement creator royalties for secondary sales
+  </Card>
+  
+  <Card title="NFT Events" icon="bolt">
+    Emit events for indexers and frontends to track
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    # Install Rust
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    
+    # Install cargo-near
+    cargo install cargo-near
+    
+    # Install NEAR CLI
+    curl --proto '=https' --tlsv1.2 -LsSf \
+      https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh \
+      | sh
+    
+    # Create testnet account
+    near account create-account sponsor-by-faucet-service your-name.testnet \
+      autogenerate-new-keypair save-to-keychain network-config testnet create
+    ```
+  </Tab>
+  
+  <Tab title="JavaScript">
+    The tutorial focuses on Rust, but check out the [JavaScript NFT example](https://github.com/near-examples/nft-js) for JS implementation.
+  </Tab>
+</Tabs>
+
+<Info>
+New to Rust? Start with the [smart contract quickstart](/smart-contracts/quickstart) to learn the basics.
+</Info>
+
+## Tutorial steps
+
+The tutorial is divided into progressive chapters:
+
+<Steps>
+  <Step title="Pre-deployed contract">
+    Start by minting NFTs using an already-deployed contract. No coding required!
+    
+    [Begin tutorial →](https://near-examples.github.io/nft-tutorial/predeployed-contract)
+  </Step>
+  
+  <Step title="Contract architecture">
+    Learn the structure of an NFT contract and compile your first version.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/skeleton)
+  </Step>
+  
+  <Step title="Minting NFTs">
+    Implement the minting function to create new NFTs.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/minting)
+  </Step>
+  
+  <Step title="Contract upgrades">
+    Learn how to upgrade deployed contracts while preserving state.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/upgrade-contract)
+  </Step>
+  
+  <Step title="Enumeration">
+    Add functions to query NFTs by owner and paginate results.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/enumeration)
+  </Step>
+  
+  <Step title="Core standard">
+    Implement transfers and the NEP-171 core standard.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/core)
+  </Step>
+  
+  <Step title="Events">
+    Emit events for minting and transfers.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/events)
+  </Step>
+  
+  <Step title="Approvals">
+    Allow marketplaces to transfer NFTs on your behalf.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/approvals)
+  </Step>
+  
+  <Step title="Royalties">
+    Add royalty payments for secondary sales.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/royalty)
+  </Step>
+  
+  <Step title="Marketplace">
+    Build a marketplace to buy and sell NFTs.
+    
+    [View chapter →](https://near-examples.github.io/nft-tutorial/marketplace)
+  </Step>
+</Steps>
+
+## Quick start example
+
+Here's a minimal NFT contract structure:
+
+```rust
+use near_sdk::{
+    near, AccountId, PanicOnDefault,
+    collections::{LazyOption, LookupMap, UnorderedSet},
+};
+use near_sdk::json_types::U128;
+
+#[near(serializers = [json, borsh])]
+pub struct Token {
+    pub token_id: String,
+    pub owner_id: AccountId,
+    pub metadata: TokenMetadata,
+}
+
+#[near(serializers = [json, borsh])]
+pub struct TokenMetadata {
+    pub title: Option<String>,
+    pub description: Option<String>,
+    pub media: Option<String>,
+    pub media_hash: Option<String>,
+}
+
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
+pub struct NftContract {
+    pub owner_id: AccountId,
+    pub tokens_per_owner: LookupMap<AccountId, UnorderedSet<String>>,
+    pub tokens_by_id: LookupMap<String, Token>,
+    pub token_metadata_by_id: LookupMap<String, TokenMetadata>,
+}
+
+#[near]
+impl NftContract {
+    #[init]
+    pub fn new(owner_id: AccountId) -> Self {
+        Self {
+            owner_id,
+            tokens_per_owner: LookupMap::new(b"o"),
+            tokens_by_id: LookupMap::new(b"t"),
+            token_metadata_by_id: LookupMap::new(b"m"),
+        }
+    }
+    
+    #[payable]
+    pub fn nft_mint(
+        &mut self,
+        token_id: String,
+        receiver_id: AccountId,
+        metadata: TokenMetadata,
+    ) -> Token {
+        // Implementation in tutorial
+        Token {
+            token_id,
+            owner_id: receiver_id,
+            metadata,
+        }
+    }
+}
+```
+
+## NFT standards (NEPs)
+
+<AccordionGroup>
+  <Accordion title="NEP-171: Core NFT Standard">
+    The foundation for all NFTs on NEAR. Defines:
+    - Token ownership
+    - Transfer methods
+    - Balance queries
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/NonFungibleToken/Core)
+  </Accordion>
+  
+  <Accordion title="NEP-177: Metadata">
+    Adds metadata to NFTs:
+    - Token title and description
+    - Media URLs (images, videos)
+    - Contract-level metadata
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/NonFungibleToken/Metadata)
+  </Accordion>
+  
+  <Accordion title="NEP-178: Approval Management">
+    Enables marketplace functionality:
+    - Approve accounts to transfer on your behalf
+    - Revoke approvals
+    - Query approved accounts
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/NonFungibleToken/ApprovalManagement)
+  </Accordion>
+  
+  <Accordion title="NEP-181: Enumeration">
+    Query functions for NFTs:
+    - Get all tokens for an owner
+    - Paginate results
+    - Get total supply
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/NonFungibleToken/Enumeration)
+  </Accordion>
+  
+  <Accordion title="NEP-199: Royalties">
+    Automatic royalty payments:
+    - Set royalty percentage
+    - Define multiple beneficiaries
+    - Paid on marketplace sales
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/NonFungibleToken/Payout)
+  </Accordion>
+</AccordionGroup>
+
+## Testing your NFT contract
+
+Use NEAR Workspaces to test:
+
+```rust
+#[tokio::test]
+async fn test_nft_mint() -> Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let contract = worker.dev_deploy(include_bytes!("../target/near/nft.wasm")).await?;
+    
+    // Initialize contract
+    contract.call("new")
+        .args_json(serde_json::json!({
+            "owner_id": contract.id()
+        }))
+        .transact()
+        .await?;
+    
+    // Mint an NFT
+    let outcome = contract
+        .call("nft_mint")
+        .args_json(serde_json::json!({
+            "token_id": "1",
+            "receiver_id": contract.id(),
+            "metadata": {
+                "title": "Test NFT",
+                "description": "A test NFT",
+                "media": "https://example.com/nft.png"
+            }
+        }))
+        .deposit(near_sdk::NearToken::from_millinear(10))
+        .transact()
+        .await?;
+    
+    assert!(outcome.is_success());
+    
+    // Query the NFT
+    let token: Token = contract
+        .view("nft_token")
+        .args_json(serde_json::json!({"token_id": "1"}))
+        .await?
+        .json()?;
+    
+    assert_eq!(token.metadata.title, Some("Test NFT".to_string()));
+    
+    Ok(())
+}
+```
+
+## Common use cases
+
+<CardGroup cols={2}>
+  <Card title="Digital art" icon="palette">
+    Create and sell unique digital artwork with royalties
+  </Card>
+  
+  <Card title="Gaming items" icon="gamepad">
+    In-game assets that players truly own
+  </Card>
+  
+  <Card title="Collectibles" icon="star">
+    Trading cards, sports memorabilia, and more
+  </Card>
+  
+  <Card title="Memberships" icon="id-card">
+    Token-gated communities and access passes
+  </Card>
+  
+  <Card title="Tickets" icon="ticket">
+    Event tickets with verifiable authenticity
+  </Card>
+  
+  <Card title="Certificates" icon="certificate">
+    Credentials, diplomas, and proof of achievement
+  </Card>
+</CardGroup>
+
+## JavaScript NFT example
+
+Prefer JavaScript? Check out the JavaScript NFT implementation:
+
+```javascript
+import { NearBindgen, near, call, view, UnorderedMap } from 'near-sdk-js';
+
+@NearBindgen({})
+class NftContract {
+  constructor() {
+    this.owner_id = '';
+    this.tokensById = new UnorderedMap('t');
+  }
+  
+  @call({ payableFunction: true })
+  nft_mint({ token_id, receiver_id, metadata }) {
+    const token = {
+      token_id,
+      owner_id: receiver_id,
+      metadata
+    };
+    
+    this.tokensById.set(token_id, token);
+    return token;
+  }
+  
+  @view({})
+  nft_token({ token_id }) {
+    return this.tokensById.get(token_id);
+  }
+}
+```
+
+[View complete JS example →](https://github.com/near-examples/nft-js)
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Start the tutorial" icon="rocket" href="https://near-examples.github.io/nft-tutorial/">
+    Begin building your NFT contract
+  </Card>
+  
+  <Card title="NFT primitives" icon="gem" href="/primitives/non-fungible-tokens">
+    Learn about using existing NFT contracts
+  </Card>
+  
+  <Card title="Auction tutorial" icon="gavel" href="/tutorials/auction-example">
+    Build an NFT auction platform
+  </Card>
+  
+  <Card title="FT tutorial" icon="coins" href="/tutorials/ft-tutorial">
+    Learn about fungible tokens
+  </Card>
+</CardGroup>

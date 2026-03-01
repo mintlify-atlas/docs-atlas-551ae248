@@ -1,0 +1,221 @@
+---
+title: Your First Web3 App
+sidebarTitle: Quickstart
+description: Quick guide to create a Web3 frontend application with NEAR integration - build a React/Next.js app where users can login with wallets and interact with smart contracts.
+---
+
+In this guide we will show you how to **build a React app connected to NEAR**, where users can **login** using their wallets and interact with a **contract**.
+
+<Tip>
+  If you already have an application and want to integrate NEAR into it, check our documentation on [wallet login integration](/web3-apps/wallet-login).
+</Tip>
+
+---
+
+## Template Setup
+
+If you already have [Node.js](https://nodejs.org/en/download) installed, you can use `create-near-app` to quickly setup a template:
+
+```bash
+npx create-near-app@latest
+
+# ✔ What do you want to build? › Web Application
+# ✔ Select a framework for your frontend › Next.js (Classic)
+# ✔ Name your project (we will create a directory with that name) … near-template
+# ✔ Run 'npm install' now? … yes
+```
+
+Once the folder is ready - and all dependencies installed - you can start the development server using `npm`.
+
+```bash
+cd near-template # go to your project folder
+npm run dev
+```
+
+Visit `http://localhost:3000` in your browser to view the dApp. Note that since the dApp uses NextJS the app might take longer to load the pages on first visit.
+
+<Accordion title="The app is not starting?">
+  Make sure you are using **node >= v22**, you can easily switch versions using `nvm use 22`
+</Accordion>
+
+<Note>
+  In this tutorial we are using the **Next.js** framework with the "classic" page-based routing, but you can select other frameworks such as Vite when creating the app.
+</Note>
+
+---
+
+## Landing Page
+
+Once the app starts you will see the landing page, rendering a navigation bar that allows users to login using their NEAR wallet. You can then navigate to the docs or the `Near Integration` page (which we will do).
+
+<Frame>
+  <img src="/assets/docs/tutorials/examples/hello-near-landing-page.png" alt="Landing page of Hello NEAR Gateway" />
+</Frame>
+
+Go ahead and sign in with your NEAR account. If you don't have one, you can create one on the fly.
+
+### Context Provider
+
+[Next.js](https://nextjs.org/) uses a template system, where each page is a React component. Our main logic is defined at `./src/pages/_app.js`, which:
+
+1. Creates a `NearProvider` that wraps the entire application to provide NEAR functionality
+2. Renders the navigation menu and the page's content
+
+```tsx src/pages/_app.tsx
+import '@/styles/globals.css';
+import type { AppProps } from 'next/app';
+import { NearProvider } from 'near-connect-hooks';
+
+export default function MyApp({ Component, pageProps }: AppProps) {
+  return (
+    <NearProvider network="testnet">
+      <Component {...pageProps} />
+    </NearProvider>
+  );
+}
+```
+
+<Accordion title="What is NEAR Connect Hooks?">
+  NEAR Connect is a library that allows users to select their preferred NEAR wallet to login. Our application uses **hooks** that wrap its functionality to make it easier to use.
+</Accordion>
+
+### Navigation Bar
+
+The navigation bar implements a button to allow users to `login` and `logout` with their NEAR wallet. The main logic comes from the `useNearWallet` hook, which exposes all wallet related functionality.
+
+```tsx src/components/navigation.tsx
+import { useNearWallet } from 'near-connect-hooks';
+
+export default function Navigation() {
+  const { signIn, signOut, accountId, isConnected } = useNearWallet();
+
+  return (
+    <nav>
+      {isConnected ? (
+        <button onClick={signOut}>
+          Disconnect {accountId}
+        </button>
+      ) : (
+        <button onClick={signIn}>Connect Wallet</button>
+      )}
+    </nav>
+  );
+}
+```
+
+---
+
+## How Do I Call Smart Contract Functions?
+
+Now that you understand how the landing page works, we can move to the `Near Integration` page, which retrieves a greeting from the [hello.near-examples.testnet](https://testnet.nearblocks.io/address/hello.near-examples.testnet) contract.
+
+### Read vs. Write Operations
+
+| Operation Type | Method | Cost | Requires Signature |
+|---------------|--------|------|-------------------|
+| **Read (view)** | `viewMethod()` | Free | No |
+| **Write (call)** | `callMethod()` | Gas fees (~0.0001 Ⓝ) | Yes |
+
+View methods query contract state without modifying it. Call methods change state and require the user to sign a transaction.
+
+<Frame>
+  <img src="/assets/docs/tutorials/examples/hello-near-gateway.png" alt="View of the Near Integration page" />
+</Frame>
+
+Login if you haven't done it yet and you will see a simple form that allows you to store a greeting in the smart contract.
+
+### Function Call Hooks
+
+Just like the [navigation bar](#navigation-bar), we use the `useNearWallet` hook to get functions that allow us to call methods on the contract:
+
+- `viewFunction` is used to call functions that are read-only
+- `callFunction` is used to call functions that modify the state of the contract
+
+```tsx src/pages/hello-near/index.tsx
+const { viewFunction, callFunction } = useNearWallet();
+```
+
+#### Calling Read-Only Methods
+
+For example, when we want to fetch the current greeting stored in the contract, we use `viewFunction` inside a `useEffect` hook:
+
+```tsx src/pages/hello-near/index.tsx
+useEffect(() => {
+  viewFunction({ contractId: CONTRACT_ID, method: 'get_greeting' })
+    .then(setGreeting);
+}, [viewFunction]);
+```
+
+#### Calling Change Methods
+
+On the other hand, when the user submits a new greeting, we use `callFunction` to send a transaction to the contract:
+
+```tsx src/pages/hello-near/index.tsx
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setLoading(true);
+
+  await callFunction({
+    contractId: CONTRACT_ID,
+    method: 'set_greeting',
+    args: { greeting: newGreeting },
+    gas: '30000000000000',
+    deposit: '0',
+  });
+
+  setLoading(false);
+  // Refresh greeting
+  const updated = await viewFunction({ contractId: CONTRACT_ID, method: 'get_greeting' });
+  setGreeting(updated);
+};
+```
+
+---
+
+## Common Questions
+
+<AccordionGroup>
+  <Accordion title="Do users need NEAR tokens to login?">
+    No. Wallet login is free. Users only pay gas fees when they call contract functions that modify state.
+  </Accordion>
+
+  <Accordion title="What wallets can users connect with?">
+    NEAR wallets (MyNearWallet, Meteor, HERE Wallet) and Ethereum wallets (Metamask, WalletConnect, Coinbase Wallet via EVM support).
+  </Accordion>
+
+  <Accordion title="How do I avoid users signing every transaction?">
+    Create a **function-call access key** by setting `createAccessKeyFor: <contract-name>` in the wallet selector config. This allows the app to sign non-payable methods automatically.
+  </Accordion>
+
+  <Accordion title="Can I use this with an existing React app?">
+    Yes. Install `near-connect-hooks` and follow our [integration guide](/web3-apps/wallet-login).
+  </Accordion>
+
+  <Accordion title="Why Next.js instead of plain React?">
+    Next.js is recommended but not required. You can use Vite/React, Vue, Svelte, or any framework. Check `create-near-app` templates for options.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+That's it for our quickstart tutorial. You have now seen a fully functional frontend that can talk with NEAR contracts and render Web3 components.
+
+<CardGroup cols={2}>
+  <Card title="Wallet Login" icon="wallet" href="/web3-apps/wallet-login">
+    Deep dive into wallet integration
+  </Card>
+  
+  <Card title="Integrate Contracts" icon="code" href="/web3-apps/integrate-contracts">
+    Learn about contract interaction patterns
+  </Card>
+  
+  <Card title="Backend Login" icon="server" href="/web3-apps/backend-login">
+    Authenticate users on your backend
+  </Card>
+  
+  <Card title="Build a Contract" icon="file-contract" href="/smart-contracts/quickstart">
+    Create your own smart contract
+  </Card>
+</CardGroup>

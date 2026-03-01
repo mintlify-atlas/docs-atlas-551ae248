@@ -1,0 +1,94 @@
+---
+title: Create a NEAR account
+description: Learn how to create a NEAR account using a wallet or the NEAR CLI
+---
+
+To start developing applications on NEAR you will need a NEAR `testnet` account. This account will allow you to deploy and test your applications without spending real money.
+
+<Note>
+If you already have a NEAR account and want to use it in another wallet or the CLI, check out our guide on [Importing a NEAR account](/tutorials/importing-account)
+</Note>
+
+## Using a wallet
+
+<Steps>
+  <Step title="Visit wallet.near.org">
+    Go to [wallet.near.org](https://wallet.near.org/) and choose one of the wallets listed there. All wallets have been curated for security and reliability.
+  </Step>
+  
+  <Step title="Choose your wallet">
+    All wallets offer similar functionality. Some wallets readily allow you to create [named accounts](/protocol/account-id) (e.g. `alice.testnet`), which are easier to remember.
+  </Step>
+  
+  <Step title="Secure your account">
+    Write down your seed phrase - it's the only way to recover your account!
+    
+    <Warning>
+    Make sure to create a `testnet` account (ending with `.testnet`, e.g. `alice.testnet`), not a `mainnet` account (ending with `.near`).
+    
+    NEAR `testnet` is a separate network that allows you to test applications without spending real money.
+    </Warning>
+  </Step>
+</Steps>
+
+<Tip>
+Need `testnet` funds? Try using one of our [faucets](/faucet)
+</Tip>
+
+## Through the CLI
+
+When developing smart contracts you will spend lots of time interacting with the NEAR blockchain through the command line interface (CLI).
+
+<Steps>
+  <Step title="Install NEAR CLI">
+    <CodeGroup>
+    ```bash macOS / Linux
+    curl --proto '=https' --tlsv1.2 -LsSf \
+      https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh \
+      | sh
+    ```
+    
+    ```bash Windows
+    irm https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.ps1 | iex
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Create your account">
+    Run the following command to create a new testnet account:
+    
+    ```bash
+    near account create-account sponsor-by-faucet-service <your-account-name>.testnet autogenerate-new-keypair save-to-keychain network-config testnet create
+    ```
+    
+    Replace `<your-account-name>` with your desired account name.
+  </Step>
+  
+  <Step title="View your account">
+    Once created, you can view your account details:
+    
+    ```bash
+    near account view-account-summary <your-account-name>.testnet network-config testnet now
+    ```
+  </Step>
+</Steps>
+
+## What's next?
+
+<CardGroup cols={2}>
+  <Card title="Get testnet tokens" icon="faucet" href="/faucet">
+    Fund your account with testnet NEAR tokens
+  </Card>
+  
+  <Card title="Build a smart contract" icon="code" href="/smart-contracts/quickstart">
+    Create your first smart contract on NEAR
+  </Card>
+  
+  <Card title="Import your account" icon="key" href="/tutorials/importing-account">
+    Learn how to import your account into other tools
+  </Card>
+  
+  <Card title="Explore the protocol" icon="book" href="/protocol/basics">
+    Understand how NEAR Protocol works
+  </Card>
+</CardGroup>

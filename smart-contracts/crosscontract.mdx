@@ -1,0 +1,622 @@
+---
+title: Cross-Contract Calls
+description: Learn how NEAR contracts interact with other contracts through asynchronous cross-contract calls and callbacks.
+---
+
+NEAR contracts can interact with other deployed contracts, querying information and executing functions through cross-contract calls.
+
+Since NEAR is a sharded blockchain, cross-contract calls are **asynchronous** and **independent**.
+
+<Info>
+**Asynchronous Execution**
+
+The **calling function** and the **callback** execute in **different blocks** (typically 1-2 blocks apart). During this time, the contract remains active and can receive other calls.
+</Info>
+
+<Warning>
+**Independent Transactions**
+
+Each function executes in its own context. If the external call fails, the calling function has already completed successfully - there's no automatic rollback. You must handle failures explicitly in the callback.
+</Warning>
+
+---
+
+## Querying Information
+
+Query information from another contract with a cross-contract call:
+
+<Tabs>
+  <Tab title="Rust (High-Level)">
+    ```rust
+    use near_sdk::{ext_contract, near, Gas, Promise};
+
+    // Define the interface for the external contract
+    #[ext_contract(hello_near)]
+    pub trait HelloNear {
+        fn get_greeting(&self) -> String;
+    }
+
+    #[near]
+    impl Contract {
+        pub fn query_greeting(&self) -> Promise {
+            let hello_account = "hello-near.testnet".parse().unwrap();
+
+            hello_near::ext(hello_account)
+                .with_static_gas(Gas::from_tgas(5))
+                .get_greeting()
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(Gas::from_tgas(5))
+                        .query_greeting_callback()
+                )
+        }
+
+        #[private]
+        pub fn query_greeting_callback(&self, #[callback_result] result: Result<String, PromiseError>) -> String {
+            match result {
+                Ok(greeting) => {
+                    near_sdk::log!("Got greeting: {}", greeting);
+                    greeting
+                },
+                Err(_) => "Failed to get greeting".to_string(),
+            }
+        }
+    }
+    ```
+
+    <Info>
+    The high-level API uses `#[ext_contract]` to define external contract interfaces.
+    </Info>
+  </Tab>
+  <Tab title="Rust (Low-Level)">
+    ```rust
+    use near_sdk::{near, env, Promise, Gas, PromiseError};
+    use serde_json::json;
+
+    #[near]
+    impl Contract {
+        pub fn query_greeting(&self) -> Promise {
+            let hello_account = "hello-near.testnet".parse().unwrap();
+            let args = json!({}).to_string().into_bytes();
+
+            let promise = Promise::new(hello_account)
+                .function_call(
+                    "get_greeting".to_owned(),
+                    args,
+                    NearToken::from_near(0),
+                    Gas::from_tgas(5),
+                );
+
+            promise.then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(Gas::from_tgas(5))
+                    .query_greeting_callback(),
+            )
+        }
+
+        #[private]
+        pub fn query_greeting_callback(&self, #[callback_result] result: Result<String, PromiseError>) -> String {
+            match result {
+                Ok(greeting) => greeting,
+                Err(_) => "Failed".to_string(),
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, call, near, NearPromise } from 'near-sdk-js';
+
+    @NearBindgen({})
+    class Contract {
+      @call({})
+      query_greeting() {
+        const promise = NearPromise.new("hello-near.testnet")
+          .functionCall(
+            "get_greeting",
+            JSON.stringify({}),
+            BigInt(0),
+            BigInt(5_000_000_000_000)
+          )
+          .then(
+            NearPromise.new(near.currentAccountId())
+              .functionCall(
+                "query_greeting_callback",
+                JSON.stringify({}),
+                BigInt(0),
+                BigInt(5_000_000_000_000)
+              )
+          );
+        
+        return promise;
+      }
+
+      @call({ privateFunction: true })
+      query_greeting_callback() {
+        try {
+          const result = near.promiseResult(0);
+          const greeting = JSON.parse(result);
+          near.log(`Got greeting: ${greeting}`);
+          return greeting;
+        } catch (e) {
+          near.log("Failed to get greeting");
+          return "Failed";
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Sending Information
+
+Call another contract passing information:
+
+<Tabs>
+  <Tab title="Rust (High-Level)">
+    ```rust
+    use near_sdk::{ext_contract, near, Gas, Promise};
+
+    #[ext_contract(hello_near)]
+    pub trait HelloNear {
+        fn set_greeting(&mut self, message: String);
+    }
+
+    #[near]
+    impl Contract {
+        pub fn change_greeting(&mut self, new_greeting: String) -> Promise {
+            let hello_account = "hello-near.testnet".parse().unwrap();
+
+            hello_near::ext(hello_account)
+                .with_static_gas(Gas::from_tgas(5))
+                .set_greeting(new_greeting.clone())
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(Gas::from_tgas(5))
+                        .change_greeting_callback(new_greeting)
+                )
+        }
+
+        #[private]
+        pub fn change_greeting_callback(
+            &mut self,
+            new_greeting: String,
+            #[callback_result] result: Result<(), PromiseError>
+        ) -> String {
+            match result {
+                Ok(_) => {
+                    near_sdk::log!("Successfully changed greeting to: {}", new_greeting);
+                    format!("Success: {}", new_greeting)
+                },
+                Err(_) => {
+                    near_sdk::log!("Failed to change greeting");
+                    "Failed".to_string()
+                },
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      @call({})
+      change_greeting({ new_greeting }) {
+        const promise = NearPromise.new("hello-near.testnet")
+          .functionCall(
+            "set_greeting",
+            JSON.stringify({ message: new_greeting }),
+            BigInt(0),
+            BigInt(30_000_000_000_000)
+          )
+          .then(
+            NearPromise.new(near.currentAccountId())
+              .functionCall(
+                "change_greeting_callback",
+                JSON.stringify({ original_greeting: new_greeting }),
+                BigInt(0),
+                BigInt(5_000_000_000_000)
+              )
+          );
+        
+        return promise;
+      }
+
+      @call({ privateFunction: true })
+      change_greeting_callback({ original_greeting }) {
+        try {
+          near.promiseResult(0);
+          near.log(`Successfully changed greeting to: ${original_greeting}`);
+          return { success: true, message: original_greeting };
+        } catch (e) {
+          near.log("Failed to change greeting");
+          return { success: false, message: "Failed" };
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Understanding Promises
+
+Cross-contract calls work by creating promises:
+
+1. **Promise to execute code** in external contract - `Promise.create`
+2. **Optional callback promise** - `Promise.then`
+
+Both promises contain:
+
+- **Address** of the contract to call
+- **Function** name to execute
+- **Arguments** to pass
+- Amount of **GAS** to use
+- NEAR **deposit** to attach
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, Promise, Gas, NearToken};
+
+    #[near]
+    impl Contract {
+        pub fn cross_contract_call(&self) -> Promise {
+            let external_address = "external.near".parse().unwrap();
+            let args = json!({ "param": "value" }).to_string().into_bytes();
+
+            Promise::new(external_address)
+                .function_call(
+                    "function_name".to_owned(),
+                    args,
+                    NearToken::from_near(0),  // Attached deposit
+                    Gas::from_tgas(5),        // Gas for external call
+                )
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(Gas::from_tgas(5))
+                        .callback_name()
+                )
+        }
+
+        #[private]
+        pub fn callback_name(&self) {
+            // Handle callback
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      @call({})
+      cross_contract_call() {
+        const promise = NearPromise.new("external.near")
+          .functionCall(
+            "function_name",
+            JSON.stringify({ param: "value" }),
+            BigInt(0),                    // Attached deposit
+            BigInt(5_000_000_000_000)    // Gas (5 TGas)
+          )
+          .then(
+            NearPromise.new(near.currentAccountId())
+              .functionCall(
+                "callback_name",
+                JSON.stringify({}),
+                BigInt(0),
+                BigInt(5_000_000_000_000)
+              )
+          );
+        
+        return promise;
+      }
+
+      @call({ privateFunction: true })
+      callback_name() {
+        // Handle callback
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+The callback can be made to **any** contract, meaning the result could be handled by another contract.
+</Tip>
+
+---
+
+## Callback Functions
+
+If your function finishes correctly, the callback will execute whether the external contract fails or not.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[near]
+    impl Contract {
+        #[private]
+        pub fn callback_handler(
+            &mut self,
+            #[callback_result] result: Result<String, PromiseError>
+        ) -> String {
+            match result {
+                Ok(value) => {
+                    near_sdk::log!("External call succeeded: {}", value);
+                    // Continue with success logic
+                    value
+                },
+                Err(err) => {
+                    near_sdk::log!("External call failed");
+                    // Rollback any state changes made in the original call
+                    // Refund user if needed
+                    "Failed".to_string()
+                },
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @call({ privateFunction: true })
+    callback_handler() {
+      try {
+        const result = near.promiseResult(0);
+        const value = JSON.parse(result);
+        near.log(`External call succeeded: ${value}`);
+        // Continue with success logic
+        return value;
+      } catch (e) {
+        near.log("External call failed");
+        // Rollback any state changes made in the original call
+        // Refund user if needed
+        return "Failed";
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+**Callback Always Executes**
+
+If your function finishes correctly, your callback will **always execute**, even if the external function fails. Always check the result and manually handle failures.
+</Warning>
+
+### What Happens if External Function Fails?
+
+If the external function panics, your callback still executes. You must:
+
+1. **Refund the predecessor** if NEAR was attached (funds are now in the contract's account)
+2. **Revert state changes** manually - they won't rollback automatically
+
+```rust
+#[private]
+pub fn callback_handler(
+    &mut self,
+    #[callback_result] result: Result<String, PromiseError>
+) {
+    if result.is_err() {
+        // Refund user
+        if self.pending_payment > 0 {
+            Promise::new(self.user.clone())
+                .transfer(NearToken::from_yoctonear(self.pending_payment));
+        }
+        // Rollback state changes
+        self.pending_payment = 0;
+        self.order_status = OrderStatus::Cancelled;
+    }
+}
+```
+
+---
+
+## Batch Calls (Same Contract)
+
+Call multiple functions on the same contract. They act as a unit - if **any function fails**, they **all get reverted**.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, Promise, Gas, NearToken};
+
+    #[near]
+    impl Contract {
+        pub fn batch_actions(&self) -> Promise {
+            let account = "contract.near".parse().unwrap();
+
+            Promise::new(account.clone())
+                .function_call(
+                    "method_one".to_owned(),
+                    json!({}).to_string().into_bytes(),
+                    NearToken::from_near(0),
+                    Gas::from_tgas(5),
+                )
+                .function_call(
+                    "method_two".to_owned(),
+                    json!({}).to_string().into_bytes(),
+                    NearToken::from_near(0),
+                    Gas::from_tgas(5),
+                )
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(Gas::from_tgas(5))
+                        .batch_callback()
+                )
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @call({})
+    batch_actions() {
+      const batchPromise = NearPromise.new("contract.near")
+        .functionCall(
+          "method_one",
+          JSON.stringify({}),
+          BigInt(0),
+          BigInt(5_000_000_000_000)
+        )
+        .functionCall(
+          "method_two",
+          JSON.stringify({}),
+          BigInt(0),
+          BigInt(5_000_000_000_000)
+        )
+        .then(
+          NearPromise.new(near.currentAccountId())
+            .functionCall(
+              "batch_callback",
+              JSON.stringify({}),
+              BigInt(0),
+              BigInt(5_000_000_000_000)
+            )
+        );
+      
+      return batchPromise;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+Callbacks only have access to the result of the **last function** in a batch call.
+</Warning>
+
+---
+
+## Parallel Calls (Different Contracts)
+
+Call functions on different contracts. They execute in parallel and don't impact each other.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[near]
+    impl Contract {
+        pub fn parallel_calls(&self) -> Promise {
+            let promise_a = Promise::new("contract-a.near".parse().unwrap())
+                .function_call(
+                    "method_a".to_owned(),
+                    vec![],
+                    NearToken::from_near(0),
+                    Gas::from_tgas(5),
+                );
+
+            let promise_b = Promise::new("contract-b.near".parse().unwrap())
+                .function_call(
+                    "method_b".to_owned(),
+                    vec![],
+                    NearToken::from_near(0),
+                    Gas::from_tgas(5),
+                );
+
+            promise_a.and(promise_b).then(
+                Self::ext(env::current_account_id())
+                    .with_static_gas(Gas::from_tgas(5))
+                    .multi_callback()
+            )
+        }
+
+        #[private]
+        pub fn multi_callback(
+            &self,
+            #[callback_result] result_a: Result<String, PromiseError>,
+            #[callback_result] result_b: Result<String, PromiseError>,
+        ) -> Vec<String> {
+            let mut results = vec![];
+            if let Ok(val) = result_a {
+                results.push(val);
+            }
+            if let Ok(val) = result_b {
+                results.push(val);
+            }
+            results
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @call({})
+    parallel_calls() {
+      const promiseA = NearPromise.new("contract-a.near")
+        .functionCall("method_a", JSON.stringify({}), BigInt(0), BigInt(5_000_000_000_000));
+      
+      const promiseB = NearPromise.new("contract-b.near")
+        .functionCall("method_b", JSON.stringify({}), BigInt(0), BigInt(5_000_000_000_000));
+
+      return promiseA.and(promiseB).then(
+        NearPromise.new(near.currentAccountId())
+          .functionCall("multi_callback", JSON.stringify({}), BigInt(0), BigInt(5_000_000_000_000))
+      );
+    }
+
+    @call({ privateFunction: true })
+    multi_callback() {
+      const results = [];
+      for (let i = 0; i < 2; i++) {
+        try {
+          const result = near.promiseResult(i);
+          results.push(JSON.parse(result));
+        } catch (e) {
+          results.push(null);
+        }
+      }
+      return results;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+Callbacks have access to the result of **all functions** in parallel calls.
+</Info>
+
+---
+
+## Security Concerns
+
+Cross-contract calls are **independent** and **asynchronous**:
+
+<Warning>
+**Critical Security Rules**
+
+1. Don't leave the contract in an exploitable state between call and callback
+2. Manually rollback state changes in the callback if the external call failed
+3. Always mark callbacks as `private`
+4. Ensure sufficient gas for callback execution
+
+**Not following these guidelines could expose your contract to exploits.**
+</Warning>
+
+<Card title="Security Best Practices" icon="shield" href="/smart-contracts/security">
+  Learn more about cross-contract call security
+</Card>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Testing" icon="flask" href="/smart-contracts/testing">
+    Test cross-contract interactions
+  </Card>
+  <Card title="Security" icon="shield" href="/smart-contracts/security">
+    Security best practices
+  </Card>
+  <Card title="Deploy" icon="rocket" href="/smart-contracts/deploy">
+    Deploy your contract
+  </Card>
+  <Card title="Examples" icon="code" href="https://github.com/near-examples">
+    View example projects
+  </Card>
+</CardGroup>

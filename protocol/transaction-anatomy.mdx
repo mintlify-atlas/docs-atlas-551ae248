@@ -1,0 +1,139 @@
+---
+title: Anatomy of a Transaction
+description: Learn about the structure and components of NEAR Protocol transactions, including signers, receivers, actions, and transaction validation fields
+---
+
+This section explains the anatomy of a transaction in the NEAR Protocol, describing its structure, components, and the actions that can be performed within a transaction.
+
+A transaction is a request from a user to the network to perform a set of actions. To create a transaction, the user must specify the following fields:
+
+- `Signer`: the account that signs the transaction
+- `Actions`: the set of actions to be performed (see below)
+- `Receiver`: the account on which to perform the actions
+
+In addition, a transaction has the following fields to ensure its integrity and validity:
+
+- `PublicKey`: the public key used to sign the transaction (so the network can verify the signature)
+- `Nonce`: a number that is incremented for each transaction sent by the `Signer`
+- `BlockHash`: the hash of a recent block, to limit the time-validity of the transaction
+
+Users create transactions and sign them with their private keys. Then, the **transaction and its signature** are broadcast together to the network, where they are validated and processed.
+
+<Tip>
+  Each transaction has exactly one `Signer` and `Receiver`, but can have multiple `Actions`.
+</Tip>
+
+<Info>
+  **About nonce values:**
+  - When adding a key, the `nonce` is automatically assigned - particularly, it is given the value `block height * 10^6` - so the value in the `ADD_KEY` action is ignored
+  - A transaction is accepted only if the `nonce` value is in the range of: `[(current_nonce_of_access_key + 1) .. (block_height * 10^6)]`
+  - Once a transaction is accepted, the access key's `nonce` is set to the `nonce` value of the included transaction
+</Info>
+
+---
+
+## Actions
+
+Each transaction can have **one or multiple** [Actions](https://nomicon.io/RuntimeSpec/Actions.html), which are the actual operations to be performed on the `Receiver` account. There are different types of actions that can be performed:
+
+<Tabs>
+  <Tab title="Core Actions">
+    <AccordionGroup>
+      <Accordion title="FunctionCall">
+        Invoke a function on a contract (optionally attaching NEAR to the call)
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#functioncallaction)
+      </Accordion>
+      
+      <Accordion title="Transfer">
+        Transfer tokens to another account
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#transferaction)
+      </Accordion>
+      
+      <Accordion title="DeployContract">
+        Deploy a contract in the account
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#deploycontractaction)
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+  
+  <Tab title="Account Management">
+    <AccordionGroup>
+      <Accordion title="CreateAccount">
+        Create a new sub-account (e.g. `ana.near` can create `sub.ana.near`)
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#createaccountaction)
+      </Accordion>
+      
+      <Accordion title="DeleteAccount">
+        Delete the account (transferring the remaining balance to a beneficiary)
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#deleteaccountaction)
+      </Accordion>
+      
+      <Accordion title="AddKey">
+        Add a new key to the account (either `FullAccess` or `FunctionCall` access)
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#addkeyaction)
+      </Accordion>
+      
+      <Accordion title="DeleteKey">
+        Delete an existing key from the account
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#deletekeyaction)
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+  
+  <Tab title="Advanced Actions">
+    <AccordionGroup>
+      <Accordion title="DeployGlobalContract">
+        Registers a global contract referenced by its contract hash or by its account ID
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#deployglobalcontractaction)
+      </Accordion>
+      
+      <Accordion title="UseGlobalContract">
+        Uses a registered global contract by contract hash or account ID
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#useglobalcontractaction)
+      </Accordion>
+      
+      <Accordion title="DelegateActions">
+        Create a meta-transaction
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#delegate-actions)
+      </Accordion>
+      
+      <Accordion title="Stake">
+        Special action to express interest in becoming a network validator
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#stakeaction)
+      </Accordion>
+      
+      <Accordion title="DeterministicStateInit">
+        Special action to create a deterministic account (an advanced kind of implicit account)
+        
+        [Learn more](https://nomicon.io/RuntimeSpec/Actions.html#deterministicstateinitaction)
+      </Accordion>
+    </AccordionGroup>
+  </Tab>
+</Tabs>
+
+---
+
+## Example: Bundled Actions
+
+For example, `bob.near` can bundle the following actions in a single transaction:
+- Create the account `contract.bob.near`
+- Transfer 5 NEAR to `contract.bob.near`
+- Deploy a contract in `contract.bob.near`
+- Call the function `init` in `contract.bob.near`
+
+The `Actions` are executed in the **order they are specified in the transaction**. If any of the **actions fails**, the transaction is discarded and none of the actions take effect.
+
+<Warning>
+  Notice that all actions are performed on the same account. It is **not possible** to perform actions on multiple accounts in a single transaction, because transactions can have **only one receiver**
+</Warning>

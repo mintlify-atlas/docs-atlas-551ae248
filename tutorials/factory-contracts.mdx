@@ -1,0 +1,395 @@
+---
+title: Factory contracts
+description: Learn how to create smart contracts that deploy other smart contracts
+---
+
+Factory contracts are smart contracts that can deploy other smart contracts. This pattern enables powerful use cases like creating token contracts on demand, deploying user-specific contracts, or building contract templates.
+
+## Overview
+
+A factory contract:
+- Stores the WASM code of contracts it can deploy
+- Creates new contract accounts
+- Deploys code to those accounts
+- Optionally initializes the deployed contracts
+
+<CardGroup cols={1}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/near-examples/factory-contract">
+    View the complete factory contract example
+  </Card>
+</CardGroup>
+
+## How it works
+
+<Steps>
+  <Step title="Store contract WASM">
+    The factory stores the binary code of contracts it will deploy:
+    
+    <Tabs>
+      <Tab title="Rust">
+        ```rust
+        use near_sdk::{near, env, Promise, AccountId};
+        use near_sdk::store::Vector;
+        
+        #[near(contract_state)]
+        pub struct Factory {
+            code: Vec<u8>,
+        }
+        
+        #[near]
+        impl Factory {
+            #[init]
+            pub fn new(code: Vec<u8>) -> Self {
+                Self { code }
+            }
+            
+            pub fn update_code(&mut self, code: Vec<u8>) {
+                self.code = code;
+            }
+        }
+        ```
+      </Tab>
+      
+      <Tab title="JavaScript">
+        ```javascript
+        import { NearBindgen, near, initialize, call } from 'near-sdk-js';
+        
+        @NearBindgen({})
+        class Factory {
+          code: Uint8Array;
+          
+          @initialize({})
+          init({ code }) {
+            this.code = code;
+          }
+          
+          @call({})
+          update_code({ code }) {
+            this.code = code;
+          }
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Create new accounts">
+    The factory creates sub-accounts and deploys contracts to them:
+    
+    <Tabs>
+      <Tab title="Rust">
+        ```rust
+        #[near]
+        impl Factory {
+            #[payable]
+            pub fn create_contract(
+                &self,
+                name: String,
+                args: Vec<u8>,
+            ) -> Promise {
+                let account_id: AccountId = format!(
+                    "{}.{}",
+                    name,
+                    env::current_account_id()
+                )
+                .parse()
+                .unwrap();
+                
+                let attached_deposit = env::attached_deposit();
+                
+                Promise::new(account_id.clone())
+                    .create_account()
+                    .transfer(attached_deposit)
+                    .deploy_contract(self.code.clone())
+                    .function_call(
+                        "init".to_string(),
+                        args,
+                        0,
+                        Gas::from_tgas(30),
+                    )
+            }
+        }
+        ```
+      </Tab>
+      
+      <Tab title="JavaScript">
+        ```javascript
+        @call({ payableFunction: true })
+        create_contract({ name, args }) {
+          const accountId = `${name}.${near.currentAccountId()}`;
+          const deposit = near.attachedDeposit();
+          
+          const promise = near.promiseBatchCreate(accountId);
+          near.promiseBatchActionCreateAccount(promise);
+          near.promiseBatchActionTransfer(promise, deposit);
+          near.promiseBatchActionDeployContract(promise, this.code);
+          near.promiseBatchActionFunctionCall(
+            promise,
+            "init",
+            args,
+            0,
+            30000000000000
+          );
+          
+          return promise;
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Deploy and test">
+    ```bash
+    # Deploy the factory
+    near contract deploy factory.testnet use-file ./factory.wasm
+    
+    # Store the contract code to deploy
+    near contract call-function as-transaction factory.testnet \
+      update_code \
+      file-args contract.wasm \
+      prepaid-gas '300 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    
+    # Create a new contract instance
+    near contract call-function as-transaction factory.testnet \
+      create_contract \
+      json-args '{"name":"my-contract","args":{}}' \
+      prepaid-gas '300 TeraGas' \
+      attached-deposit '3 NEAR' \
+      network-config testnet
+    ```
+  </Step>
+</Steps>
+
+## Use cases
+
+<CardGroup cols={2}>
+  <Card title="Token factories" icon="coins">
+    Deploy new FT or NFT contracts on demand for users or projects
+  </Card>
+  
+  <Card title="DAO factories" icon="users">
+    Create DAO contracts with custom governance rules
+  </Card>
+  
+  <Card title="Game instances" icon="gamepad">
+    Spawn isolated game session contracts
+  </Card>
+  
+  <Card title="User contracts" icon="user">
+    Deploy personal contracts for each user (e.g., wallets, vaults)
+  </Card>
+</CardGroup>
+
+## Best practices
+
+<AccordionGroup>
+  <Accordion title="Account naming">
+    Choose a clear naming convention for deployed contracts:
+    - Use meaningful prefixes: `token.factory.near`
+    - Include version numbers if needed: `v1.token.factory.near`
+    - Consider uniqueness: append timestamps or counters
+    - Sub-accounts cost storage, factor into deposit requirements
+  </Accordion>
+  
+  <Accordion title="Storage costs">
+    Creating accounts and deploying contracts requires NEAR deposits:
+    - Account creation: ~0.00182 NEAR minimum
+    - Code storage: ~0.0001 NEAR per byte
+    - State storage: depends on contract initialization
+    - Always require sufficient deposit in `create_contract`
+  </Accordion>
+  
+  <Accordion title="Code updates">
+    Plan for updating the contract template:
+    - Implement `update_code` with proper access control
+    - Consider versioning: maintain multiple templates
+    - Test thoroughly before updating production code
+    - Document breaking changes
+  </Accordion>
+  
+  <Accordion title="Security considerations">
+    Protect your factory from abuse:
+    - Limit who can create contracts (whitelist, fees, etc.)
+    - Validate contract initialization parameters
+    - Consider rate limiting
+    - Monitor for suspicious patterns
+  </Accordion>
+</AccordionGroup>
+
+## Advanced patterns
+
+### Versioned deployments
+
+Maintain multiple contract versions:
+
+```rust
+#[near(contract_state)]
+pub struct Factory {
+    versions: UnorderedMap<String, Vec<u8>>,
+}
+
+#[near]
+impl Factory {
+    pub fn add_version(&mut self, version: String, code: Vec<u8>) {
+        self.versions.insert(version, code);
+    }
+    
+    #[payable]
+    pub fn create_contract_version(
+        &self,
+        version: String,
+        name: String,
+        args: Vec<u8>,
+    ) -> Promise {
+        let code = self.versions.get(&version).expect("Version not found");
+        // ... deploy with specific version
+    }
+}
+```
+
+### Access control
+
+Restrict who can create contracts:
+
+```rust
+#[near(contract_state)]
+pub struct Factory {
+    owner: AccountId,
+    whitelist: UnorderedSet<AccountId>,
+}
+
+#[near]
+impl Factory {
+    #[payable]
+    pub fn create_contract(&self, name: String) -> Promise {
+        let caller = env::predecessor_account_id();
+        require!(
+            self.whitelist.contains(&caller),
+            "Not authorized to create contracts"
+        );
+        // ... create contract
+    }
+}
+```
+
+### Callback tracking
+
+Track deployed contracts:
+
+```rust
+#[near(contract_state)]
+pub struct Factory {
+    deployed_contracts: Vector<AccountId>,
+}
+
+#[near]
+impl Factory {
+    #[private]
+    pub fn on_contract_created(&mut self, account_id: AccountId) {
+        if env::promise_results_count() == 1 {
+            match env::promise_result(0) {
+                PromiseResult::Successful(_) => {
+                    self.deployed_contracts.push(account_id);
+                    log!("Contract deployed successfully");
+                }
+                _ => log!("Contract deployment failed"),
+            }
+        }
+    }
+    
+    pub fn get_deployed_contracts(&self) -> Vec<AccountId> {
+        self.deployed_contracts.iter().collect()
+    }
+}
+```
+
+## Testing factory contracts
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[tokio::test]
+    async fn test_factory_deployment() -> Result<()> {
+        let worker = near_workspaces::sandbox().await?;
+        let factory_wasm = std::fs::read("factory.wasm")?;
+        let contract_wasm = std::fs::read("contract.wasm")?;
+        
+        // Deploy factory
+        let factory = worker.dev_deploy(&factory_wasm).await?;
+        
+        // Initialize with contract code
+        factory
+            .call("new")
+            .args_borsh(contract_wasm.clone())
+            .transact()
+            .await?;
+        
+        // Create a new contract
+        let outcome = factory
+            .call("create_contract")
+            .args_json(serde_json::json!({
+                "name": "test-contract",
+                "args": "{}"
+            }))
+            .deposit(near_sdk::NearToken::from_near(5))
+            .transact()
+            .await?;
+        
+        assert!(outcome.is_success());
+        
+        Ok(())
+    }
+    ```
+  </Tab>
+  
+  <Tab title="JavaScript">
+    ```javascript
+    import { Worker } from 'near-workspaces';
+    
+    test('factory deploys contracts', async () => {
+      const worker = await Worker.init();
+      const root = worker.rootAccount;
+      
+      // Deploy factory
+      const factory = await root.devDeploy('factory.wasm');
+      const contractCode = await fs.readFile('contract.wasm');
+      
+      // Initialize factory
+      await factory.call('init', { code: contractCode });
+      
+      // Create new contract
+      await factory.call(
+        'create_contract',
+        { name: 'test', args: {} },
+        { attachedDeposit: '5000000000000000000000000' }
+      );
+      
+      // Verify deployment
+      const deployed = await factory.view('get_deployed_contracts', {});
+      expect(deployed).toContain('test.' + factory.accountId);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Update contracts" icon="rotate" href="/tutorials/update-migrate-state">
+    Learn how to update deployed contracts
+  </Card>
+  
+  <Card title="Cross-contract calls" icon="arrows-rotate" href="/tutorials/cross-contract-calls">
+    Interact with deployed contracts
+  </Card>
+  
+  <Card title="DAO primitives" icon="users" href="/primitives/dao">
+    Use factories to create DAOs
+  </Card>
+  
+  <Card title="Contract standards" icon="book-open" href="/primitives/what-is">
+    Implement standard interfaces
+  </Card>
+</CardGroup>

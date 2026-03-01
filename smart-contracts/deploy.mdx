@@ -1,0 +1,412 @@
+---
+title: Deploying Smart Contracts
+description: Learn how to deploy NEAR smart contracts to testnet and mainnet using NEAR CLI.
+---
+
+After your contract is ready, you can deploy it to the NEAR network for everyone to use.
+
+This guide shows you how to deploy using [NEAR CLI](/tools/cli), the recommended command-line tool for interacting with NEAR.
+
+---
+
+## Prerequisites
+
+Before deploying, ensure you have:
+
+<Checklist>
+  <Check>Compiled your contract to WASM</Check>
+  <Check>Tested your contract thoroughly</Check>
+  <Check>NEAR CLI installed</Check>
+  <Check>A NEAR account (testnet or mainnet)</Check>
+</Checklist>
+
+---
+
+## Step 1: Compile the Contract
+
+First, compile your contract to WebAssembly:
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    cargo near build
+    ```
+
+    This creates a WASM file in `target/near/`.
+  </Tab>
+  <Tab title="JavaScript">
+    ```bash
+    npm run build
+    # or
+    yarn build
+    ```
+
+    This creates a WASM file in `build/`.
+  </Tab>
+</Tabs>
+
+<Info>
+The compiled `.wasm` file is what gets deployed to the blockchain.
+</Info>
+
+---
+
+## Step 2: Create an Account
+
+### For Testnet
+
+Create a new testnet account using the faucet:
+
+```bash
+# Replace <your-account.testnet> with your desired name
+near create-account <your-account.testnet> --useFaucet
+```
+
+<Success>
+This creates an account and funds it with test NEAR tokens.
+</Success>
+
+### For Mainnet
+
+For mainnet, you'll need:
+1. A wallet (e.g., [MyNearWallet](https://mynearwallet.com))
+2. Real NEAR tokens to create the account
+3. Log in via CLI:
+
+```bash
+near login
+```
+
+<Warning>
+**Mainnet Deployment Checklist**
+
+Before deploying to mainnet:
+- ✅ Contract has been thoroughly tested
+- ✅ Contract has been audited (for high-value contracts)
+- ✅ Contract has been tested on testnet
+- ✅ You have sufficient NEAR for deployment and storage
+</Warning>
+
+---
+
+## Step 3: Deploy the Contract
+
+Deploy your compiled contract to your account:
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    near deploy <your-account.testnet> ./target/near/contract.wasm
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```bash
+    near deploy <your-account.testnet> ./build/contract.wasm
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+**Network Selection**
+
+By default, NEAR CLI uses testnet. To deploy to mainnet:
+```bash
+export NEAR_ENV=mainnet
+near deploy <your-account.near> <path-to-wasm>
+```
+</Info>
+
+### Deploy to Existing Account
+
+If you already have an account:
+
+```bash
+# Login first
+near login
+
+# Deploy
+near deploy <your-account.testnet> <path-to-wasm>
+```
+
+<Tip>
+You can overwrite a contract by deploying another on top of it. The account's logic will change, but the state will persist.
+</Tip>
+
+---
+
+## Step 4: Initialize the Contract
+
+If your contract has an [initialization method](/smart-contracts/storage#initialization-functions), call it after deployment:
+
+```bash
+near call <your-account.testnet> init '{"owner": "<your-account.testnet>"}' --useAccount <your-account.testnet>
+```
+
+### Initialize During Deployment
+
+You can initialize during deployment:
+
+```bash
+near deploy <your-account.testnet> <wasm-file> \
+  --initFunction init \
+  --initArgs '{"owner": "<your-account.testnet>"}'
+```
+
+---
+
+## Interacting with Deployed Contract
+
+### View Methods
+
+View methods are read-only and free to call:
+
+```bash
+near view <your-account.testnet> get_greeting '{}'
+```
+
+Example output:
+```json
+"Hello, World!"
+```
+
+<Info>
+View methods have a default gas limit of 200 TGas.
+</Info>
+
+### Call Methods
+
+Call methods modify state and require gas:
+
+```bash
+near call <your-account.testnet> set_greeting '{"greeting": "Hello NEAR!"}' \
+  --useAccount <your-account.testnet>
+```
+
+### Call with Deposit
+
+For payable functions, attach NEAR tokens:
+
+```bash
+near call <your-account.testnet> donate '{}' \
+  --useAccount <your-account.testnet> \
+  --deposit 5
+```
+
+<Tip>
+Deposit amounts are in NEAR tokens (not yoctoNEAR).
+</Tip>
+
+### Specify Gas
+
+Manually specify gas for complex operations:
+
+```bash
+near call <your-account.testnet> complex_operation '{}' \
+  --useAccount <your-account.testnet> \
+  --gas 300000000000000
+```
+
+---
+
+## Deployment Costs
+
+### Storage Costs
+
+Contracts pay for storage by locking NEAR tokens:
+
+- **~1Ⓝ per 100KB** of data
+- Storage costs are locked, not spent
+- Deleting data releases locked tokens
+
+<Tabs>
+  <Tab title="Small Contract">
+    A simple contract (~50KB):
+    - **Cost: ~0.5Ⓝ**
+    - Example: Hello World, basic counter
+  </Tab>
+  <Tab title="Medium Contract">
+    Medium complexity (~200KB):
+    - **Cost: ~2Ⓝ**
+    - Example: Token contract, simple DEX
+  </Tab>
+  <Tab title="Large Contract">
+    Complex contract (~500KB):
+    - **Cost: ~5Ⓝ**
+    - Example: Full-featured DEX, DAO
+  </Tab>
+</Tabs>
+
+### Check Contract Size
+
+```bash
+# Check WASM file size
+ls -lh ./target/near/contract.wasm
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Test on Testnet First">
+    Always deploy to testnet first:
+    1. Test all functionality
+    2. Have users try it out
+    3. Fix any issues
+    4. Then deploy to mainnet
+  </Accordion>
+
+  <Accordion title="Use Descriptive Account Names">
+    Choose clear account names:
+    - ✅ `mytoken.near`
+    - ✅ `marketplace.near`
+    - ❌ `abc123.near`
+  </Accordion>
+
+  <Accordion title="Document Your Contract">
+    After deployment, document:
+    - Contract methods and parameters
+    - How to interact with it
+    - Security considerations
+    - Admin functions
+  </Accordion>
+
+  <Accordion title="Plan for Upgrades">
+    Consider upgrade strategy:
+    - How will you update the contract?
+    - Do you need state migration?
+    - Who can upgrade it?
+    
+    See [Contract Upgrades](/smart-contracts/upgrade) for details.
+  </Accordion>
+
+  <Accordion title="Monitor Your Contract">
+    After deployment:
+    - Monitor contract calls
+    - Track errors and failures
+    - Watch for unusual activity
+    - Use indexers for analytics
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Verifying Deployment
+
+### Check Contract Code
+
+Verify the contract is deployed:
+
+```bash
+near view-state <your-account.testnet> --finality final
+```
+
+### View Contract on Explorer
+
+Visit the NEAR Explorer:
+
+<Tabs>
+  <Tab title="Testnet">
+    https://testnet.nearblocks.io/address/YOUR-ACCOUNT.testnet
+  </Tab>
+  <Tab title="Mainnet">
+    https://nearblocks.io/address/YOUR-ACCOUNT.near
+  </Tab>
+</Tabs>
+
+You can see:
+- Contract code hash
+- Contract size
+- Transaction history
+- Contract calls
+
+---
+
+## Common Issues
+
+<AccordionGroup>
+  <Accordion title="Error: Account already exists">
+    The account name is taken. Choose a different name:
+    ```bash
+    near create-account different-name.testnet --useFaucet
+    ```
+  </Accordion>
+
+  <Accordion title="Error: Insufficient balance">
+    Your account needs more NEAR tokens:
+    - **Testnet**: Use the faucet again or request from the community
+    - **Mainnet**: Add more NEAR to your account
+  </Accordion>
+
+  <Accordion title="Error: Cannot deserialize contract state">
+    This happens when:
+    - Contract state structure changed
+    - Need to migrate state
+    
+    See [Contract Upgrades](/smart-contracts/upgrade#state-migration) for solutions.
+  </Accordion>
+
+  <Accordion title="Contract not initializing">
+    If your contract requires initialization:
+    ```bash
+    near call <contract> init '{"param": "value"}' --useAccount <account>
+    ```
+    
+    Or use `--initFunction` during deployment.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Environment Variables
+
+Useful environment variables for deployment:
+
+```bash
+# Set network (testnet or mainnet)
+export NEAR_ENV=testnet
+
+# Set custom RPC endpoint
+export NEAR_CLI_TESTNET_RPC_SERVER_URL=https://rpc.testnet.near.org
+
+# Set custom node URL
+export NODE_ENV=production
+```
+
+---
+
+## Deployment Checklist
+
+Before deploying to mainnet:
+
+<Checklist>
+  <Check>Contract compiled successfully</Check>
+  <Check>All tests passing</Check>
+  <Check>Tested on testnet</Check>
+  <Check>Security review completed</Check>
+  <Check>Documentation written</Check>
+  <Check>Sufficient NEAR in account</Check>
+  <Check>Backup of contract source code</Check>
+  <Check>Team members have access keys (if applicable)</Check>
+  <Check>Monitoring set up</Check>
+  <Check>Upgrade strategy defined</Check>
+</Checklist>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Upgrade Contract" icon="arrow-up" href="/smart-contracts/upgrade">
+    Learn how to update deployed contracts
+  </Card>
+  <Card title="Monitor Activity" icon="chart-line" href="/data/indexers">
+    Track contract usage and analytics
+  </Card>
+  <Card title="Build Frontend" icon="browser" href="/tutorials/frontend">
+    Create a web interface for your contract
+  </Card>
+  <Card title="NEAR CLI" icon="terminal" href="/tools/cli">
+    Learn more NEAR CLI commands
+  </Card>
+</CardGroup>

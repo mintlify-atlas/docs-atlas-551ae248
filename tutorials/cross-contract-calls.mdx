@@ -1,0 +1,317 @@
+---
+title: Cross-contract calls
+description: Learn how to perform cross-contract calls to interact with other smart contracts on NEAR
+---
+
+Cross-contract calls allow your smart contract to interact with other contracts on the NEAR blockchain. This enables powerful composability and integration patterns.
+
+## Overview
+
+This tutorial teaches you how to:
+- Make simple cross-contract calls
+- Handle callbacks from other contracts
+- Work with promises
+- Handle errors in cross-contract interactions
+
+## Simple cross-contract call
+
+The simplest example calls the [Hello NEAR](https://github.com/near-examples/hello-near-examples) contract to set and retrieve a greeting.
+
+<CardGroup cols={1}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/near-examples/cross-contract-calls">
+    View the complete example on GitHub
+  </Card>
+</CardGroup>
+
+## How it works
+
+<Steps>
+  <Step title="Make the cross-contract call">
+    Your contract creates a promise to call another contract's method:
+    
+    <Tabs>
+      <Tab title="Rust">
+        ```rust
+        use near_sdk::{ext_contract, Promise};
+        
+        // Define the interface of the external contract
+        #[ext_contract(ext_hello)]
+        trait HelloContract {
+            fn set_greeting(&mut self, greeting: String);
+            fn get_greeting(&self) -> String;
+        }
+        
+        #[near]
+        impl Contract {
+            pub fn call_set_greeting(
+                &self,
+                account_id: AccountId,
+                greeting: String,
+            ) -> Promise {
+                ext_hello::ext(account_id)
+                    .set_greeting(greeting)
+            }
+        }
+        ```
+      </Tab>
+      
+      <Tab title="JavaScript">
+        ```javascript
+        import { near, call } from 'near-sdk-js';
+        
+        @call({})
+        call_set_greeting({ account_id, greeting }) {
+          const promise = near.promiseBatchCreate(account_id);
+          near.promiseBatchActionFunctionCall(
+            promise,
+            "set_greeting",
+            JSON.stringify({ greeting }),
+            0,
+            30000000000000
+          );
+          return promise;
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Handle the callback">
+    Add a callback method to process the result:
+    
+    <Tabs>
+      <Tab title="Rust">
+        ```rust
+        #[near]
+        impl Contract {
+            #[private]
+            pub fn callback_greeting(&self) -> String {
+                match env::promise_result(0) {
+                    PromiseResult::Successful(value) => {
+                        let greeting = near_sdk::serde_json::from_slice::<String>(&value)
+                            .unwrap();
+                        log!("Received greeting: {}", greeting);
+                        greeting
+                    }
+                    _ => {
+                        log!("Promise failed");
+                        "Failed to get greeting".to_string()
+                    }
+                }
+            }
+            
+            pub fn get_greeting_with_callback(
+                &self,
+                account_id: AccountId,
+            ) -> Promise {
+                ext_hello::ext(account_id)
+                    .get_greeting()
+                    .then(
+                        Self::ext(env::current_account_id())
+                            .callback_greeting()
+                    )
+            }
+        }
+        ```
+      </Tab>
+      
+      <Tab title="JavaScript">
+        ```javascript
+        @call({ privateFunction: true })
+        callback_greeting() {
+          const result = near.promiseResult(0);
+          if (result) {
+            const greeting = JSON.parse(result);
+            near.log(`Received greeting: ${greeting}`);
+            return greeting;
+          }
+          return "Failed to get greeting";
+        }
+        
+        @call({})
+        get_greeting_with_callback({ account_id }) {
+          const promise = near.promiseBatchCreate(account_id);
+          near.promiseBatchActionFunctionCall(
+            promise,
+            "get_greeting",
+            "{}",
+            0,
+            30000000000000
+          );
+          
+          const callbackPromise = near.promiseThen(
+            promise,
+            near.currentAccountId(),
+            "callback_greeting",
+            "{}",
+            0,
+            30000000000000
+          );
+          
+          return near.promiseReturn(callbackPromise);
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Deploy and test">
+    ```bash
+    # Deploy your contract
+    near contract deploy <your-contract>.testnet use-file ./contract.wasm
+    
+    # Call the cross-contract method
+    near contract call-function as-transaction <your-contract>.testnet \
+      call_set_greeting \
+      json-args '{"account_id":"hello.near-examples.testnet","greeting":"Hi!"}' \
+      prepaid-gas '100 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    ```
+  </Step>
+</Steps>
+
+## Key concepts
+
+<AccordionGroup>
+  <Accordion title="Promises">
+    Cross-contract calls use promises to handle asynchronous operations:
+    - **Promise creation**: Initiates a call to another contract
+    - **Promise chaining**: Sequences multiple calls with `.then()`
+    - **Promise results**: Access results in callback functions
+  </Accordion>
+  
+  <Accordion title="Callbacks">
+    Callbacks handle the results of cross-contract calls:
+    - Must be marked as `#[private]` (Rust) or `privateFunction: true` (JS)
+    - Only callable by the contract itself
+    - Access promise results via `env::promise_result()` or `near.promiseResult()`
+  </Accordion>
+  
+  <Accordion title="Gas considerations">
+    Cross-contract calls require careful gas management:
+    - Allocate sufficient gas for the external call
+    - Reserve gas for the callback
+    - Total gas = call gas + callback gas
+    - Failed calls due to insufficient gas cannot be recovered
+  </Accordion>
+  
+  <Accordion title="Error handling">
+    Handle errors gracefully:
+    - Check promise results in callbacks
+    - Provide fallback behavior for failed calls
+    - Log errors for debugging
+    - Consider refund logic for failed operations
+  </Accordion>
+</AccordionGroup>
+
+## Common patterns
+
+### Sequential calls
+
+Make multiple calls in sequence:
+
+```rust
+ext_contract_a::ext(account_a)
+    .method_a()
+    .then(
+        ext_contract_b::ext(account_b)
+            .method_b()
+    )
+    .then(
+        Self::ext(env::current_account_id())
+            .callback_final()
+    )
+```
+
+### Batch calls
+
+Make multiple independent calls:
+
+```rust
+let promise_a = ext_contract_a::ext(account_a).method_a();
+let promise_b = ext_contract_b::ext(account_b).method_b();
+
+Promise::and(vec![promise_a, promise_b])
+    .then(
+        Self::ext(env::current_account_id())
+            .callback_both()
+    )
+```
+
+## Testing cross-contract calls
+
+Use NEAR Workspaces to test cross-contract interactions:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[tokio::test]
+    async fn test_cross_contract_call() -> Result<()> {
+        let worker = near_workspaces::sandbox().await?;
+        
+        // Deploy both contracts
+        let hello_contract = worker.dev_deploy(HELLO_WASM).await?;
+        let caller_contract = worker.dev_deploy(CALLER_WASM).await?;
+        
+        // Make cross-contract call
+        let outcome = caller_contract
+            .call("call_set_greeting")
+            .args_json(serde_json::json!({
+                "account_id": hello_contract.id(),
+                "greeting": "Testing!"
+            }))
+            .gas(100_000_000_000_000)
+            .transact()
+            .await?;
+        
+        assert!(outcome.is_success());
+        
+        Ok(())
+    }
+    ```
+  </Tab>
+  
+  <Tab title="JavaScript">
+    ```javascript
+    import { Worker } from 'near-workspaces';
+    
+    test('cross-contract call works', async () => {
+      const worker = await Worker.init();
+      
+      // Deploy contracts
+      const hello = await worker.devDeploy('hello.wasm');
+      const caller = await worker.devDeploy('caller.wasm');
+      
+      // Test cross-contract call
+      await caller.call('call_set_greeting', {
+        account_id: hello.accountId,
+        greeting: 'Testing!'
+      }, { gas: '100000000000000' });
+      
+      const greeting = await hello.view('get_greeting', {});
+      expect(greeting).toBe('Testing!');
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Advanced cross-contract calls" icon="rocket" href="https://github.com/near-examples/cross-contract-calls/tree/main/contract-advanced-ts">
+    Learn about parallel and batch cross-contract calls
+  </Card>
+  
+  <Card title="Factory contracts" icon="industry" href="/tutorials/factory-contracts">
+    Deploy contracts from contracts
+  </Card>
+  
+  <Card title="NFT marketplace" icon="store" href="/tutorials/nft-tutorial">
+    Build a marketplace using cross-contract calls
+  </Card>
+  
+  <Card title="Contract security" icon="shield-halved" href="/smart-contracts/security">
+    Secure your cross-contract interactions
+  </Card>
+</CardGroup>

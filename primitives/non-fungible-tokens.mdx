@@ -1,0 +1,301 @@
+---
+title: Non-Fungible Tokens
+description: Learn about NEAR non-fungible tokens (NFT) following NEP-171 and NEP-177 standards - mint, transfer, query, and trade unique digital assets.
+---
+
+Non-Fungible Tokens (NFT) are unitary and therefore unique. This makes NFTs ideal to represent ownership of assets such as a piece of digital content, or a ticket for an event.
+
+<img src="/images/primitives/nft-diagram.png" alt="Non-Fungible Tokens" />
+
+As with fungible tokens, NFTs are **not stored** in the user's wallet. Instead, each NFT lives in an **NFT contract** that works as a bookkeeper, being in charge of creating, storing, and transferring NFTs.
+
+<Note>
+Be mindful of not confusing an NFT contract with an NFT marketplace. NFT contracts simply store information (metadata), while NFT marketplaces are contracts where NFTs can be listed and exchanged for a price.
+</Note>
+
+---
+
+## The Standard
+
+[NEP-171](https://github.com/near/NEPs/tree/master/neps/nep-0171.md) is the blueprint for all non-fungible tokens on NEAR. It defines a common set of rules and functions that the contract MUST implement to be considered a non-fungible token contract.
+
+[NEP-177](https://github.com/near/NEPs/blob/master/neps/nep-0177.md) extends NEP-171 to define the metadata for both non-fungible tokens and NFT contracts.
+
+---
+
+## Deploying an NFT Contract
+
+You can deploy your own NFT contract using the [reference implementation](https://github.com/near-examples/NFT).
+
+<CodeGroup>
+```bash CLI
+near deploy <account-id> --wasmFile contract.wasm --initFunction new
+```
+
+```bash Global Contract (By Account)
+near contract deploy <account-id> use-global-account-id nft.globals.primitives.testnet \
+  with-init-call new \
+  json-args '{"owner_id": "<account-id>", "metadata": {"spec": "nft-1.0.0", "name": "MY_NFT", "symbol": "NFT2000"}}' \
+  prepaid-gas '100.0 Tgas' \
+  attached-deposit '0 NEAR' \
+  network-config testnet \
+  sign-with-keychain \
+  send
+```
+
+```bash Global Contract (By Hash)
+near contract deploy <account-id> use-global-hash ivu1e9obVRnMJLSvVPRgtYefUYUS1L3f5eYHjS86zL9 \
+  with-init-call new \
+  json-args '{"owner_id": "<account-id>", "metadata": {"spec": "nft-1.0.0", "name": "MY_NFT", "symbol": "NFT2000"}}' \
+  prepaid-gas '100.0 Tgas' \
+  attached-deposit '0 NEAR' \
+  network-config testnet \
+  sign-with-keychain \
+  send
+```
+</CodeGroup>
+
+<Note>
+Deploying by **hash** creates an immutable contract that never changes. Deploying by **account ID** creates an updatable contract that changes when the referenced account's contract is updated.
+</Note>
+
+---
+
+## Minting an NFT
+
+To create a new NFT (minting), you call the `nft_mint` method with the metadata that defines the NFT.
+
+<CodeGroup>
+```bash CLI
+near call nft.primitives.near nft_mint '{
+  "token_id": "1",
+  "receiver_id": "bob.near",
+  "token_metadata": {
+    "title": "NFT Primitive Token",
+    "description": "Awesome NFT Primitive Token",
+    "media": "https://example.com/nft.png"
+  }
+}' --deposit 0.01 --accountId bob.near
+```
+
+```javascript JavaScript
+await wallet.signAndSendTransaction({
+  receiverId: 'nft.primitives.near',
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'nft_mint',
+      args: {
+        token_id: '1',
+        receiver_id: 'bob.near',
+        token_metadata: {
+          title: 'NFT Primitive Token',
+          description: 'Awesome NFT Primitive Token',
+          media: 'https://example.com/nft.png',
+        },
+      },
+      gas: '30000000000000',
+      deposit: '10000000000000000000000',
+    }
+  }]
+});
+```
+
+```rust Rust Contract
+#[ext_contract(ext_nft_contract)]
+trait ExternalNftContract {
+  fn nft_mint(&self, token_series_id: String, receiver_id: AccountId) -> Promise;
+}
+
+#[near]
+impl Contract {
+  #[payable]
+  pub fn nft_mint(&mut self, token_series_id: String, receiver_id: AccountId) -> Promise {
+    let promise = ext_nft_contract::ext(self.nft_contract.clone())
+      .with_static_gas(Gas(30 * TGAS))
+      .with_attached_deposit(env::attached_deposit())
+      .nft_mint(token_series_id, receiver_id);
+
+    promise.then(
+      Self::ext(env::current_account_id())
+        .with_static_gas(Gas(30 * TGAS))
+        .nft_mint_callback()
+    )
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+See the [metadata standard](https://github.com/near/NEPs/tree/master/neps/nep-0177.md) for the full list of `TokenMetadata` parameters.
+</Note>
+
+### Royalties
+
+Royalties enable you to create a list of users that should get paid when the token is sold in a marketplace. For example, if `anna` has `5%` royalties, each time the NFT is sold, `anna` should get 5% of the selling price.
+
+---
+
+## Querying NFT Data
+
+You can query the NFT's information and metadata by calling `nft_token`.
+
+<CodeGroup>
+```bash CLI
+near view nft.primitives.near nft_token '{"token_id": "1"}'
+```
+
+```javascript JavaScript
+const nftData = await wallet.viewMethod({
+  contractId: 'nft.primitives.near',
+  method: 'nft_token',
+  args: {
+    token_id: '1',
+  },
+});
+
+console.log(nftData);
+// {
+//   "token_id": "1",
+//   "owner_id": "bob.near",
+//   "metadata": {
+//     "title": "NFT Primitive Token",
+//     "description": "Awesome NFT Primitive Token",
+//     "media": "https://example.com/nft.png",
+//     ...
+//   }
+// }
+```
+</CodeGroup>
+
+---
+
+## Transferring an NFT
+
+Transferring an NFT can happen in two scenarios: (1) you ask to transfer an NFT you own, or (2) an [authorized account](#approving-users) asks to transfer the NFT.
+
+In both cases, invoke the `nft_transfer` method with the token ID and receiver.
+
+<CodeGroup>
+```bash CLI
+near call nft.primitives.near nft_transfer '{
+  "token_id": "1",
+  "receiver_id": "alice.near"
+}' --deposit 0.000000000000000000000001 --accountId bob.near
+```
+
+```javascript JavaScript
+await wallet.signAndSendTransaction({
+  receiverId: 'nft.primitives.near',
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'nft_transfer',
+      args: {
+        token_id: '1',
+        receiver_id: 'alice.near',
+      },
+      gas: '30000000000000',
+      deposit: '1',
+    }
+  }]
+});
+```
+
+```rust Rust Contract
+const YOCTO_NEAR: u128 = 1;
+
+#[ext_contract(ext_nft_contract)]
+trait ExternalNftContract {
+  fn nft_transfer(&self, receiver_id: AccountId, token_id: TokenId) -> Promise;
+}
+
+impl Contract {
+  #[payable]
+  pub fn nft_transfer(&mut self, receiver_id: AccountId, token_id: TokenId) -> Promise {
+    let promise = ext_nft_contract::ext(self.nft_contract.clone())
+      .with_attached_deposit(YOCTO_NEAR)
+      .nft_transfer(receiver_id, token_id);
+
+    promise.then(
+      Self::ext(env::current_account_id())
+        .nft_transfer_callback()
+    )
+  }
+}
+```
+</CodeGroup>
+
+---
+
+## Attaching NFTs to a Call
+
+Natively, only NEAR tokens can be attached to function calls. However, the NFT standard enables attaching non-fungible tokens by using the NFT contract as an intermediary.
+
+Instead of attaching tokens directly, you ask the NFT contract to do both a transfer and a function call on your behalf using `nft_transfer_call`.
+
+<CodeGroup>
+```bash CLI
+near call <nft-contract> nft_transfer_call '{
+  "receiver_id": "<receiver-contract>",
+  "token_id": "<token_id>",
+  "msg": "<a-string-message>"
+}' --deposit 0.000000000000000000000001 --accountId <your-account>
+```
+</CodeGroup>
+
+### How it Works
+
+1. You call `nft_transfer_call` in the NFT contract passing: the receiver, a message, and the token ID.
+2. The NFT contract transfers the NFT to the receiver.
+3. The NFT contract calls `receiver.nft_on_transfer(sender, token-owner, token-id, msg)`.
+4. The NFT contract handles errors in the `nft_resolve_transfer` callback.
+5. The NFT contract returns `true` if it succeeded.
+
+Contracts expecting to receive NFTs must implement the `nft_on_transfer` method:
+
+```rust
+pub fn nft_on_transfer(
+  &mut self,
+  sender_id: AccountId,
+  previous_owner_id: AccountId,
+  token_id: TokenId,
+  msg: String,
+) -> PromiseOrValue<bool> {
+  // Your logic here
+  
+  // Return true to return NFT to sender, false to keep it
+  PromiseOrValue::Value(false)
+}
+```
+
+---
+
+## Approving Users
+
+You can authorize other users to transfer an NFT you own. This is useful for listing your NFT in a marketplace.
+
+<CodeGroup>
+```bash CLI
+near call <nft-contract> nft_approve '{
+  "token_id": "<token-unique-id>",
+  "account_id": "<authorized-account>",
+  "msg": "<json-structure>"
+}' --deposit 0.01 --accountId <your-account>
+```
+</CodeGroup>
+
+<Note>
+If the `msg` parameter is included, a cross-contract call will be made to `<authorized_account>.nft_on_approve(msg)`, which will then make a callback to `nft_resolve_transfer` in your NFT contract.
+</Note>
+
+---
+
+## Additional Resources
+
+- [NEP-171 Standard (NFT Core)](https://github.com/near/NEPs/tree/master/neps/nep-0171.md)
+- [NEP-177 Standard (NFT Metadata)](https://github.com/near/NEPs/blob/master/neps/nep-0177.md)
+- [NEP-178 Standard (NFT Approval Management)](https://github.com/near/NEPs/blob/master/neps/nep-0178.md)
+- [NFT Reference Implementation](https://github.com/near-examples/NFT)
+- [NFT Tutorial (JavaScript)](https://docs.near.org/tutorials/nfts-js)
+- [NFT Tutorial (Rust)](https://docs.near.org/tutorials/nfts)

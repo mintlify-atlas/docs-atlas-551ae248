@@ -1,0 +1,268 @@
+---
+title: 'What is Lake Framework?'
+description: 'A library to build your own indexer using the existing NEAR Data Lake'
+keywords: ['NEAR Lake', 'indexer', 'data lake', 'blockchain data', 'streaming', 'AWS S3']
+---
+
+NEAR Lake Framework is an ecosystem of library companions that read data from the [NEAR Data Lake](#data-lake). They allow you to build your own indexer by simply subscribing to the stream of blocks that is being constantly pushed to the NEAR Lake.
+
+<iframe
+  width="100%"
+  height="400px"
+  src="https://www.youtube.com/embed/GsF7I93K-EQ"
+  title="NEAR Lake Indexer"
+  frameBorder="0"
+  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+  allowFullScreen
+/>
+
+*Example of a simple indexer built on top of NEAR Lake Framework*
+
+You can create your own logic to process the NEAR Protocol data in the programming languages of your choice:
+
+<CardGroup cols={3}>
+  <Card title="Python" icon="python" href="http://pypi.org/project/near-lake-framework">
+    PyPI Package
+  </Card>
+  <Card title="JavaScript" icon="js" href="https://github.com/near/near-lake-framework-js">
+    npm Package
+  </Card>
+  <Card title="Rust" icon="rust" href="https://crates.io/crates/near-lake-framework">
+    Crates.io Package
+  </Card>
+</CardGroup>
+
+<Info>
+  **GitHub repo:** https://github.com/near/near-lake-framework/
+</Info>
+
+---
+
+## Data Lake
+
+The NEAR Lake is a set of AWS S3 buckets which are constantly receiving new blocks from a [running indexer](https://github.com/aurora-is-near/near-lake-indexer) maintained by [Aurora](https://aurora.dev).
+
+Events such as [FT Events](https://github.com/near/NEPs/tree/master/neps/nep-0300.md) and [NFT Events](https://github.com/near/NEPs/tree/master/neps/nep-0256.md) are constantly being written as JSON files in two AWS S3 buckets:
+
+<Tabs>
+  <Tab title="Mainnet">
+    **Bucket:** `near-lake-data-mainnet`
+    
+    **Region:** `eu-central-1`
+    
+    Contains all production blockchain data from NEAR Protocol mainnet.
+  </Tab>
+  <Tab title="Testnet">
+    **Bucket:** `near-lake-data-testnet`
+    
+    **Region:** `eu-central-1`
+    
+    Contains all blockchain data from NEAR Protocol testnet for development and testing.
+  </Tab>
+</Tabs>
+
+<Warning>
+  Both buckets are set up the way the **requester pays for the access**. Anyone can read from these buckets by connecting to them with their own AWS credentials to be charged by Amazon.
+</Warning>
+
+---
+
+## Latency
+
+Indexers based on the Lake Framework inherit [the latency characteristics of a NEAR Indexer](https://github.com/near/nearcore/tree/master/chain/indexer) **plus an extra 0.1-2.1s latency** of dumping to and reading from AWS S3.
+
+<Tip>
+  Most of the latency is there due to the finalization delay and both Indexer Framework and Lake Framework add quite a minimum overhead.
+</Tip>
+
+**Typical latency breakdown:**
+- Finalization delay: ~3-5 seconds
+- S3 write/read overhead: 0.1-2.1 seconds
+- **Total end-to-end:** 3.9-7.1 seconds (estimated average 6-8s)
+
+---
+
+## Cost
+
+Indexers based on NEAR Lake consume 100-500MB of RAM depending on the size of the preloading queue, it does not require any storage, and it can potentially run even on Raspberry PI.
+
+Getting the blockchain data from S3 will cost around **$30.16 per month** as NEAR Lake configured S3 buckets in such a way that **the reader is paying the costs**.
+
+<AccordionGroup>
+  <Accordion title="AWS S3 Cost Breakdown">
+    Assuming NEAR Protocol produces 1 block every 600ms, on a full day the network can create up to 144000 blocks (86400s / 600ms per block).
+
+    According to the [Amazon S3 prices](https://aws.amazon.com/s3/pricing/?nc1=h_ls) `list` requests are charged for $0.005 per 1000 requests and `get` is charged for $0.0004 per 1000 requests.
+
+    **Calculations** (assuming we are following the tip of the network all the time):
+
+    **GET requests:**
+    ```
+    144000 blocks per day * 10 requests for each block / 1000 requests * $0.0004 per 1k requests = $0.576 * 30 days = $17.20
+    ```
+
+    **Note:** 10 requests for each block means we have 9 shards (1 file for common block data and 9 separate files for each shard)
+
+    **LIST requests:**
+    ```
+    144000 blocks per day / 1000 requests * $0.005 per 1k list requests = $0.72 * 30 days = $21.60
+    ```
+
+    **Total monthly cost:**
+    ```
+    $17.20 + $21.60 = $38.80
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Comparison with NEAR Indexer Framework
+
+NEAR Lake Framework is reading data from AWS S3, while the NEAR Indexer is running a full node and reading data from the blockchain directly in real time.
+
+| Feature | Indexer Framework | Lake Framework |
+|---------|------------------|----------------|
+| **Follows blocks and transactions** | Yes | Yes (mainnet and testnet only) |
+| **Decentralized** | Yes | No (Pagoda Inc dumps blocks to AWS S3) |
+| **Reaction time (end-to-end)** | Minimum 3.8s (estimated average 5-7s) | Minimum 3.9s (estimated average 6-8s) |
+| **Reaction time (framework overhead)** | 0.1s | 0.2-2.2s |
+| **Infrastructure cost** | [$500+/mo](https://near-nodes.io/rpc/hardware-rpc) | **$20-40/mo** |
+| **Ease of maintenance** | Advanced (follow nearcore upgrades, sync state) | **Easy** (deploy once and forget) |
+| **Time to start** | Days (on mainnet/testnet) | **Seconds** |
+| **Local development** | Advanced (localnet option, but testnet/mainnet testing is heavy) | **Easy** |
+| **Programming languages** | Rust only | **Any** (Python, JavaScript, Rust) |
+
+<Tip>
+  NEAR Lake Framework is the recommended solution for most use cases due to its ease of use, lower cost, and support for multiple programming languages.
+</Tip>
+
+---
+
+## Key Benefits
+
+<CardGroup cols={2}>
+  <Card title="Cost-Efficient" icon="dollar-sign">
+    Runs on minimal infrastructure (~$30/month) compared to running a full node ($500+/month)
+  </Card>
+  <Card title="Easy Setup" icon="zap">
+    Start indexing in seconds, not days. No blockchain state sync required.
+  </Card>
+  <Card title="Multiple Languages" icon="code">
+    Build indexers in Python, JavaScript, or Rust based on your team's expertise.
+  </Card>
+  <Card title="Low Maintenance" icon="wrench">
+    Deploy once and forget. No need to follow nearcore upgrades or manage node infrastructure.
+  </Card>
+</CardGroup>
+
+---
+
+## How It Works
+
+<Steps>
+  <Step title="Choose your language">
+    Install the NEAR Lake Framework library for Python, JavaScript, or Rust.
+  </Step>
+  <Step title="Configure AWS credentials">
+    Set up AWS credentials to access the S3 buckets (you pay for access).
+  </Step>
+  <Step title="Define your indexing logic">
+    Write code to filter and process the blockchain data you need.
+  </Step>
+  <Step title="Start streaming">
+    Run your indexer and start receiving blocks in real-time.
+  </Step>
+</Steps>
+
+---
+
+## Examples & Tutorials
+
+<CardGroup cols={2}>
+  <Card title="Raw Printer" icon="print" href="https://github.com/near-examples/near-lake-raw-printer">
+    Simple example of a data printer built on top of NEAR Lake Framework
+  </Card>
+  <Card title="Accounts Watcher" icon="eye" href="https://github.com/near-examples/near-lake-accounts-watcher">
+    Source code for a video tutorial on how to use the NEAR Lake Framework
+  </Card>
+  <Card title="Transaction Watcher" icon="search" href="https://github.com/near-examples/indexer-tx-watcher-example-lake">
+    Indexer example that watches for transactions for specified accounts/contracts
+  </Card>
+  <Card title="More Tutorials" icon="book" href="/data-infrastructure/tutorials">
+    Browse all NEAR Lake Framework tutorials
+  </Card>
+</CardGroup>
+
+---
+
+## Getting Started
+
+<Tabs>
+  <Tab title="Python">
+    ```bash
+    pip install near-lake-framework
+    ```
+
+    ```python
+    from near_lake_framework import LakeConfig, streamer
+
+    async def handle_block(block):
+        print(f"Block #{block.block_height}")
+
+    config = LakeConfig.mainnet()
+    config.start_block_height = 80000000
+
+    await streamer(config, handle_block)
+    ```
+  </Tab>
+
+  <Tab title="JavaScript">
+    ```bash
+    npm install near-lake-framework
+    ```
+
+    ```javascript
+    const { LakeConfig, startStream } = require('near-lake-framework');
+
+    async function handleBlock(block) {
+      console.log(`Block #${block.blockHeight}`);
+    }
+
+    const config = LakeConfig.mainnet();
+    config.startBlockHeight = 80000000;
+
+    startStream(config, handleBlock);
+    ```
+  </Tab>
+
+  <Tab title="Rust">
+    ```bash
+    cargo add near-lake-framework
+    ```
+
+    ```rust
+    use near_lake_framework::LakeConfigBuilder;
+
+    #[tokio::main]
+    async fn main() -> Result<(), Box<dyn std::error::Error>> {
+        let config = LakeConfigBuilder::default()
+            .mainnet()
+            .start_block_height(80000000)
+            .build()?;
+
+        let stream = near_lake_framework::streamer(config);
+
+        while let Some(block) = stream.recv().await {
+            println!("Block #{}", block.block_height());
+        }
+
+        Ok(())
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Card title="Build Your First Indexer" icon="rocket" href="/data-infrastructure/tutorials">
+  Follow our step-by-step tutorials to build your first NEAR Lake indexer
+</Card>

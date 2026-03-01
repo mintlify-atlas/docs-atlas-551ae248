@@ -1,0 +1,621 @@
+---
+title: Upgrading Smart Contracts
+description: Learn how to safely upgrade NEAR smart contracts, including state migration strategies and best practices for contract updates.
+---
+
+NEAR accounts separate their logic (contract code) from their state (storage), allowing the code to be changed without losing data.
+
+Contracts can be updated in two ways:
+
+<CardGroup cols={2}>
+  <Card title="Via Tools" icon="terminal">
+    Using NEAR CLI or API if you hold the account's full access key
+  </Card>
+  <Card title="Programmatically" icon="code">
+    Implementing a method that takes new code and deploys it
+  </Card>
+</CardGroup>
+
+---
+
+## Updating via NEAR CLI
+
+The simplest way to update a contract is to re-deploy using NEAR CLI:
+
+```bash
+# Compile your updated contract
+cargo near build  # or npm run build
+
+# Deploy the new version
+near deploy <your-account.testnet> <path-to-new-wasm>
+```
+
+<Info>
+The account's state persists - only the code changes.
+</Info>
+
+---
+
+## Programmatic Updates
+
+A contract can update itself by implementing an update method:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, Promise};
+
+    #[near]
+    impl Contract {
+        /// Update the contract code
+        /// Only callable by the contract owner
+        pub fn update_contract(&self) -> Promise {
+            // Check authorization
+            self.assert_owner();
+
+            // Get new contract code from input
+            let code = env::input().expect("No input");
+
+            // Deploy the new code
+            Promise::new(env::current_account_id())
+                .deploy_contract(code.to_vec())
+        }
+
+        fn assert_owner(&self) {
+            assert_eq!(
+                env::predecessor_account_id(),
+                self.owner,
+                "Only owner can update"
+            );
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, call, near, bytes } from 'near-sdk-js';
+
+    @NearBindgen({})
+    class Contract {
+      owner = '';
+
+      @call({})
+      update_contract({ code }) {
+        // Check authorization
+        this.assert_owner();
+
+        // Deploy new code
+        const promise = near.promiseBatchCreate(near.currentAccountId());
+        near.promiseBatchActionDeployContract(promise, code);
+        return promise;
+      }
+
+      assert_owner() {
+        if (near.predecessorAccountId() !== this.owner) {
+          throw new Error('Only owner can update');
+        }
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Calling the Update Method
+
+<Tabs>
+  <Tab title="CLI">
+    ```bash
+    # Read the contract code
+    CONTRACT_CODE=$(cat path/to/new-contract.wasm | base64)
+
+    # Call update method
+    near call <contract-account> update_contract \
+      file-args <path/to/wasm> \
+      --gas 300000000000000 \
+      --useAccount <owner-account>
+    ```
+  </Tab>
+  <Tab title="JavaScript (NEAR API)">
+    ```javascript
+    const fs = require('fs');
+    const { connect, keyStores } = require('near-api-js');
+
+    // Read contract code
+    const code = fs.readFileSync('./path/to/contract.wasm');
+
+    // Connect to NEAR
+    const near = await connect({
+      networkId: 'testnet',
+      keyStore: new keyStores.UnencryptedFileSystemKeyStore(),
+      nodeUrl: 'https://rpc.testnet.near.org',
+    });
+
+    const account = await near.account('owner-account.testnet');
+
+    // Update contract
+    await account.functionCall({
+      contractId: 'contract-account.testnet',
+      methodName: 'update_contract',
+      args: code,
+      gas: '300000000000000',
+    });
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+**DAO Factories**
+
+This is how DAO factories [update their contracts](https://github.com/near-daos/sputnik-dao-contract/blob/main/sputnikdao-factory2/src/factory_manager.rs#L60).
+</Tip>
+
+---
+
+## State Migration
+
+Since the account's state persists when updating the contract, changes to the state structure require migration.
+
+### Safe Changes
+
+<Checklist>
+  <Check>Adding new methods - ✅ No problems</Check>
+  <Check>Modifying existing methods - ✅ Usually safe if state unchanged</Check>
+  <Check>Modifying state structure - ⚠️ Requires migration</Check>
+</Checklist>
+
+### When Migration is Needed
+
+If you modify or remove structures stored in state, you'll see:
+
+```
+Error: Cannot deserialize the contract state
+```
+
+You have three options:
+
+1. **Use a different account** (fresh start)
+2. **Rollback** to previous contract code
+3. **Migrate the state** (recommended for production)
+
+---
+
+## State Migration Example
+
+### Original Contract
+
+Suppose you have a guest book contract:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, store::Vector};
+
+    #[near(serializers=[borsh])]
+    pub struct PostedMessage {
+        pub premium: bool,
+        pub sender: AccountId,
+        pub text: String,
+    }
+
+    #[near(contract_state)]
+    pub struct Contract {
+        messages: Vector<PostedMessage>,
+        payments: Vector<u128>,
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      messages = [];
+      payments = [];
+      
+      schema = {
+        messages: [{ premium: 'boolean', sender: 'string', text: 'string' }],
+        payments: ['string'],
+      };
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Updated Contract
+
+You decide to store payments inside messages:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[near(serializers=[borsh])]
+    pub struct PostedMessage {
+        pub premium: bool,
+        pub sender: AccountId,
+        pub text: String,
+        pub payment: u128,  // NEW FIELD
+    }
+
+    #[near(contract_state)]
+    pub struct Contract {
+        messages: Vector<PostedMessage>,
+        // payments vector removed
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      messages = [];
+      
+      schema = {
+        messages: [{
+          premium: 'boolean',
+          sender: 'string',
+          text: 'string',
+          payment: 'string'  // NEW FIELD
+        }],
+      };
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### The Problem
+
+If you deploy this directly:
+
+1. Extra `payments` vector still in storage
+2. Existing `PostedMessages` missing the `payment` field
+3. Contract fails to deserialize state
+
+### The Solution: Migration Method
+
+Implement a migration function:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, store::Vector};
+
+    // Old state structure
+    #[near(serializers=[borsh])]
+    struct OldPostedMessage {
+        premium: bool,
+        sender: AccountId,
+        text: String,
+    }
+
+    #[near(serializers=[borsh])]
+    struct OldState {
+        messages: Vector<OldPostedMessage>,
+        payments: Vector<u128>,
+    }
+
+    // New state structure
+    #[near(serializers=[borsh])]
+    pub struct PostedMessage {
+        pub premium: bool,
+        pub sender: AccountId,
+        pub text: String,
+        pub payment: u128,
+    }
+
+    #[near(contract_state)]
+    pub struct Contract {
+        messages: Vector<PostedMessage>,
+    }
+
+    #[near]
+    impl Contract {
+        /// Migration method
+        #[init(ignore_state)]
+        #[private]
+        pub fn migrate() -> Self {
+            // Read old state
+            let old_state: OldState = env::state_read()
+                .expect("Failed to read state");
+
+            // Create new messages with payments
+            let mut new_messages = Vector::new(b"m");
+            
+            for i in 0..old_state.messages.len() {
+                let old_msg = old_state.messages.get(i).unwrap();
+                let payment = old_state.payments.get(i).unwrap_or(0);
+                
+                new_messages.push(PostedMessage {
+                    premium: old_msg.premium,
+                    sender: old_msg.sender,
+                    text: old_msg.text,
+                    payment,
+                });
+            }
+
+            // Return new state
+            Self {
+                messages: new_messages,
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      messages = [];
+
+      @initialize({})
+      migrate() {
+        // Read old state directly from storage
+        const oldMessages = this.messages || [];
+        const oldPayments = this.payments || [];
+
+        // Transform to new structure
+        this.messages = oldMessages.map((msg, index) => ({
+          premium: msg.premium,
+          sender: msg.sender,
+          text: msg.text,
+          payment: oldPayments[index] || '0',
+        }));
+
+        // Clear old payments field
+        delete this.payments;
+
+        near.log('Migration completed');
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+**Important:**
+
+The migration function is an initialization method that **ignores** the existing state (`#[init(ignore_state)]` or `@initialize`), allowing it to execute and rewrite the state.
+</Warning>
+
+### Running the Migration
+
+```bash
+# 1. Deploy the new contract
+near deploy <contract-account> <new-wasm>
+
+# 2. Call the migration method
+near call <contract-account> migrate '{}' --useAccount <contract-account>
+```
+
+<Tip>
+**Why Remove Old Structures?**
+
+Old data remains in storage even after migration, occupying space and costing NEAR. Always clean up by calling methods like `clear()` on removed collections.
+</Tip>
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="1. Test Migrations on Testnet">
+    Always test state migrations on testnet first:
+    
+    1. Deploy old version
+    2. Add test data
+    3. Deploy new version
+    4. Run migration
+    5. Verify all data migrated correctly
+  </Accordion>
+
+  <Accordion title="2. Version Your State">
+    Include a version field in your contract state:
+    
+    ```rust
+    #[near(contract_state)]
+    pub struct Contract {
+        version: u32,
+        // other fields
+    }
+    ```
+    
+    This makes it easier to handle multiple migration paths.
+  </Accordion>
+
+  <Accordion title="3. Plan for Upgrades">
+    Design your contract with upgrades in mind:
+    
+    - Use collections instead of fixed structures
+    - Keep state structure simple
+    - Document state schema
+    - Plan migration strategy early
+  </Accordion>
+
+  <Accordion title="4. Limit Update Permissions">
+    Restrict who can update the contract:
+    
+    ```rust
+    pub fn update_contract(&self) {
+        // Only specific accounts can update
+        assert_eq!(
+            env::predecessor_account_id(),
+            self.owner,
+            "Unauthorized"
+        );
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="5. Use DAO for Governance">
+    For important contracts, use a DAO to govern updates:
+    
+    - Community votes on upgrades
+    - Timelock for updates
+    - Emergency pause mechanism
+  </Accordion>
+
+  <Accordion title="6. Back Up Contract State">
+    Before major updates:
+    
+    1. Export contract state
+    2. Save locally
+    3. Verify export is complete
+    4. Then proceed with update
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Common Migration Patterns
+
+### Adding Optional Fields
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    // Before
+    pub struct User {
+        pub name: String,
+        pub balance: u128,
+    }
+
+    // After - no migration needed if using Option
+    pub struct User {
+        pub name: String,
+        pub balance: u128,
+        pub email: Option<String>,  // Optional field
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    // Fields can be undefined without migration
+    class User {
+      name = '';
+      balance = '0';
+      email = null;  // Optional field
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Renaming Fields
+
+Requires migration to copy data:
+
+```rust
+#[init(ignore_state)]
+pub fn migrate() -> Self {
+    let old: OldContract = env::state_read().unwrap();
+    Self {
+        new_field_name: old.old_field_name,
+        // ... other fields
+    }
+}
+```
+
+### Changing Field Types
+
+Requires migration with type conversion:
+
+```rust
+#[init(ignore_state)]
+pub fn migrate() -> Self {
+    let old: OldContract = env::state_read().unwrap();
+    Self {
+        // Convert String to AccountId
+        account: old.account_string.parse().unwrap(),
+        // ... other fields
+    }
+}
+```
+
+---
+
+## Emergency Procedures
+
+### Rollback
+
+If an update goes wrong, rollback immediately:
+
+```bash
+# Redeploy previous version
+near deploy <account> <old-contract.wasm>
+```
+
+### Pause Contract
+
+Implement a pause mechanism for emergencies:
+
+```rust
+#[near]
+impl Contract {
+    pub fn pause(&mut self) {
+        self.assert_owner();
+        self.paused = true;
+    }
+
+    pub fn unpause(&mut self) {
+        self.assert_owner();
+        self.paused = false;
+    }
+
+    fn assert_not_paused(&self) {
+        assert!(!self.paused, "Contract is paused");
+    }
+}
+```
+
+---
+
+## Migration Checklist
+
+<Checklist>
+  <Check>Backup current contract state</Check>
+  <Check>Test migration on testnet with real data</Check>
+  <Check>Write migration function</Check>
+  <Check>Document state changes</Check>
+  <Check>Plan rollback procedure</Check>
+  <Check>Notify users of upcoming update</Check>
+  <Check>Deploy new contract</Check>
+  <Check>Run migration</Check>
+  <Check>Verify migration succeeded</Check>
+  <Check>Test all functionality</Check>
+  <Check>Monitor for issues</Check>
+</Checklist>
+
+---
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="Migration Example" icon="code" href="https://github.com/near-examples/update-migrate-rust">
+    Complete migration example project
+  </Card>
+  <Card title="DAO Updates" icon="users" href="https://github.com/near-daos/sputnik-dao-contract">
+    How DAOs handle contract updates
+  </Card>
+  <Card title="Testing" icon="flask" href="/smart-contracts/testing">
+    Test your migrations thoroughly
+  </Card>
+  <Card title="Security" icon="shield" href="/smart-contracts/security">
+    Security considerations for updates
+  </Card>
+</CardGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Monitor Contract" icon="chart-line" href="/data/indexers">
+    Track your contract after updates
+  </Card>
+  <Card title="Build Frontend" icon="browser" href="/tutorials/frontend">
+    Update your frontend for new features
+  </Card>
+  <Card title="Security Audit" icon="shield-check" href="/smart-contracts/security">
+    Audit after major changes
+  </Card>
+  <Card title="Documentation" icon="book" href="/smart-contracts/anatomy">
+    Update your documentation
+  </Card>
+</CardGroup>

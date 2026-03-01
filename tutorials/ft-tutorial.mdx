@@ -1,0 +1,465 @@
+---
+title: Fungible token zero to hero tutorial
+description: Master NEAR fungible tokens by building a complete FT contract from scratch
+---
+
+Learn everything about fungible tokens (FTs) on NEAR by building a fully-featured FT smart contract that implements all standard extensions.
+
+## Overview
+
+This comprehensive tutorial series guides you from using a pre-deployed FT contract to implementing every aspect of the NEP-141 fungible token standard and its extensions.
+
+<CardGroup cols={1}>
+  <Card title="FT Tutorial Series" icon="graduation-cap" href="https://near-examples.github.io/ft-tutorial/">
+    Complete step-by-step fungible token tutorial
+  </Card>
+</CardGroup>
+
+## What you'll learn
+
+<CardGroup cols={2}>
+  <Card title="NEP-141 Core" icon="coins">
+    The foundational FT standard for creating and transferring tokens
+  </Card>
+  
+  <Card title="NEP-148 Metadata" icon="tag">
+    Add token name, symbol, decimals, and icon
+  </Card>
+  
+  <Card title="NEP-145 Storage" icon="database">
+    Implement storage management to prevent state bloat
+  </Card>
+  
+  <Card title="Token Economics" icon="chart-line">
+    Design tokenomics, supply, and distribution
+  </Card>
+  
+  <Card title="Marketplace Integration" icon="store">
+    Enable buying NFTs with your fungible token
+  </Card>
+  
+  <Card title="FT Events" icon="bolt">
+    Emit events for transfers and mints
+  </Card>
+</CardGroup>
+
+## Prerequisites
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    # Install Rust
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    
+    # Install cargo-near
+    cargo install cargo-near
+    
+    # Install NEAR CLI
+    curl --proto '=https' --tlsv1.2 -LsSf \
+      https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh \
+      | sh
+    
+    # Create testnet account
+    near account create-account sponsor-by-faucet-service your-name.testnet \
+      autogenerate-new-keypair save-to-keychain network-config testnet create
+    ```
+  </Tab>
+  
+  <Tab title="JavaScript">
+    The tutorial focuses on Rust, but fungible tokens can also be built in JavaScript using near-sdk-js.
+  </Tab>
+</Tabs>
+
+<Info>
+New to Rust? Start with the [smart contract quickstart](/smart-contracts/quickstart) to learn the basics.
+</Info>
+
+## Tutorial steps
+
+Progress through these chapters to master fungible tokens:
+
+<Steps>
+  <Step title="Pre-deployed contract">
+    Interact with an existing FT contract. Receive tokens without writing any code!
+    
+    [Begin tutorial →](https://near-examples.github.io/ft-tutorial/predeployed-contract)
+  </Step>
+  
+  <Step title="Contract architecture">
+    Understand the FT contract structure and compile the skeleton code.
+    
+    [View chapter →](https://near-examples.github.io/ft-tutorial/skeleton)
+  </Step>
+  
+  <Step title="Defining your token">
+    Customize your token with name, symbol, decimals, and total supply.
+    
+    [View chapter →](https://near-examples.github.io/ft-tutorial/defining-a-token)
+  </Step>
+  
+  <Step title="Circulating supply">
+    Create an initial token supply and see your tokens in wallets.
+    
+    [View chapter →](https://near-examples.github.io/ft-tutorial/circulating-supply)
+  </Step>
+  
+  <Step title="Registering accounts">
+    Implement storage management to prevent account draining attacks.
+    
+    [View chapter →](https://near-examples.github.io/ft-tutorial/registering-accounts)
+  </Step>
+  
+  <Step title="Transferring tokens">
+    Implement the core transfer functionality.
+    
+    [View chapter →](https://near-examples.github.io/ft-tutorial/transfers)
+  </Step>
+  
+  <Step title="Marketplace integration">
+    Use your FT to buy NFTs on a marketplace.
+    
+    [View chapter →](https://near-examples.github.io/ft-tutorial/marketplace)
+  </Step>
+</Steps>
+
+## Quick start example
+
+Here's a minimal fungible token contract:
+
+```rust
+use near_sdk::{
+    near, AccountId, PanicOnDefault,
+    collections::LookupMap,
+    json_types::U128,
+};
+
+#[near(serializers = [json, borsh])]
+pub struct FungibleTokenMetadata {
+    pub spec: String,
+    pub name: String,
+    pub symbol: String,
+    pub decimals: u8,
+}
+
+#[near(contract_state)]
+#[derive(PanicOnDefault)]
+pub struct FungibleToken {
+    pub owner_id: AccountId,
+    pub total_supply: u128,
+    pub balances: LookupMap<AccountId, u128>,
+    pub metadata: FungibleTokenMetadata,
+}
+
+#[near]
+impl FungibleToken {
+    #[init]
+    pub fn new(
+        owner_id: AccountId,
+        total_supply: U128,
+        metadata: FungibleTokenMetadata,
+    ) -> Self {
+        let mut ft = Self {
+            owner_id: owner_id.clone(),
+            total_supply: total_supply.0,
+            balances: LookupMap::new(b"b"),
+            metadata,
+        };
+        
+        // Give total supply to owner
+        ft.balances.insert(&owner_id, &total_supply.0);
+        
+        ft
+    }
+    
+    pub fn ft_transfer(
+        &mut self,
+        receiver_id: AccountId,
+        amount: U128,
+    ) {
+        let sender_id = env::predecessor_account_id();
+        let amount = amount.0;
+        
+        // Get balances
+        let sender_balance = self.balances.get(&sender_id)
+            .expect("Account not registered");
+        let receiver_balance = self.balances.get(&receiver_id)
+            .expect("Receiver not registered");
+        
+        // Check sufficient balance
+        require!(
+            sender_balance >= amount,
+            "Insufficient balance"
+        );
+        
+        // Update balances
+        self.balances.insert(&sender_id, &(sender_balance - amount));
+        self.balances.insert(&receiver_id, &(receiver_balance + amount));
+    }
+    
+    pub fn ft_balance_of(&self, account_id: AccountId) -> U128 {
+        self.balances.get(&account_id).unwrap_or(0).into()
+    }
+}
+```
+
+## FT standards (NEPs)
+
+<AccordionGroup>
+  <Accordion title="NEP-141: Core Fungible Token">
+    The foundation for all fungible tokens on NEAR. Defines:
+    - Token transfers
+    - Balance queries
+    - Total supply tracking
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/FungibleToken/Core)
+  </Accordion>
+  
+  <Accordion title="NEP-148: Metadata">
+    Standardizes token information:
+    - Token name (e.g., "US Dollar Coin")
+    - Symbol (e.g., "USDC")
+    - Decimals (e.g., 6)
+    - Icon URL
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/FungibleToken/Metadata)
+  </Accordion>
+  
+  <Accordion title="NEP-145: Storage Management">
+    Prevents state bloat attacks:
+    - Accounts must pay for their storage
+    - Registration before receiving tokens
+    - Storage deposit refunds
+    
+    [Read the standard](https://nomicon.io/Standards/StorageManagement)
+  </Accordion>
+  
+  <Accordion title="NEP-297: Events">
+    Emit events for indexers:
+    - ft_mint events
+    - ft_transfer events
+    - ft_burn events
+    
+    [Read the standard](https://nomicon.io/Standards/Tokens/FungibleToken/Event)
+  </Accordion>
+</AccordionGroup>
+
+## Storage management
+
+A critical security feature:
+
+```rust
+#[near]
+impl FungibleToken {
+    #[payable]
+    pub fn storage_deposit(
+        &mut self,
+        account_id: Option<AccountId>,
+    ) -> StorageBalance {
+        let account = account_id.unwrap_or_else(env::predecessor_account_id);
+        let deposit = env::attached_deposit();
+        
+        // Check if already registered
+        if self.balances.contains_key(&account) {
+            // Refund deposit
+            if deposit > 0 {
+                Promise::new(env::predecessor_account_id())
+                    .transfer(deposit);
+            }
+        } else {
+            // Register account
+            let min_balance = self.storage_balance_bounds().min;
+            require!(
+                deposit >= min_balance,
+                format!("Deposit must be at least {}", min_balance)
+            );
+            
+            self.balances.insert(&account, &0);
+            
+            // Refund excess
+            let refund = deposit - min_balance;
+            if refund > 0 {
+                Promise::new(env::predecessor_account_id())
+                    .transfer(refund);
+            }
+        }
+        
+        self.storage_balance_of(account).unwrap()
+    }
+}
+```
+
+## Testing your FT contract
+
+Comprehensive testing example:
+
+```rust
+#[tokio::test]
+async fn test_ft_transfer() -> Result<()> {
+    let worker = near_workspaces::sandbox().await?;
+    let contract = worker.dev_deploy(include_bytes!("../target/near/ft.wasm")).await?;
+    
+    // Initialize
+    contract.call("new")
+        .args_json(serde_json::json!({
+            "owner_id": contract.id(),
+            "total_supply": "1000000",
+            "metadata": {
+                "spec": "ft-1.0.0",
+                "name": "Test Token",
+                "symbol": "TEST",
+                "decimals": 18
+            }
+        }))
+        .transact()
+        .await?;
+    
+    // Create test account
+    let alice = worker.dev_create_account().await?;
+    
+    // Register alice
+    alice.call(contract.id(), "storage_deposit")
+        .args_json(serde_json::json!({"account_id": alice.id()}))
+        .deposit(near_sdk::NearToken::from_millinear(10))
+        .transact()
+        .await?;
+    
+    // Transfer tokens
+    contract.call("ft_transfer")
+        .args_json(serde_json::json!({
+            "receiver_id": alice.id(),
+            "amount": "1000"
+        }))
+        .transact()
+        .await?;
+    
+    // Verify balance
+    let balance: U128 = contract
+        .view("ft_balance_of")
+        .args_json(serde_json::json!({"account_id": alice.id()}))
+        .await?
+        .json()?;
+    
+    assert_eq!(balance.0, 1000);
+    
+    Ok(())
+}
+```
+
+## Common use cases
+
+<CardGroup cols={2}>
+  <Card title="Stablecoins" icon="dollar-sign">
+    Create tokens pegged to fiat currencies
+  </Card>
+  
+  <Card title="Governance tokens" icon="gavel">
+    Power DAO voting and decision-making
+  </Card>
+  
+  <Card title="Reward points" icon="star">
+    Loyalty programs and user incentives
+  </Card>
+  
+  <Card title="Gaming currency" icon="gamepad">
+    In-game economies and virtual goods
+  </Card>
+  
+  <Card title="Wrapped tokens" icon="box-open">
+    Bridge tokens from other chains
+  </Card>
+  
+  <Card title="DeFi tokens" icon="chart-line">
+    Build lending, DEX, and yield protocols
+  </Card>
+</CardGroup>
+
+## Token economics
+
+<AccordionGroup>
+  <Accordion title="Fixed supply">
+    Set total supply at initialization. No minting or burning:
+    
+    ```rust
+    #[init]
+    pub fn new(total_supply: U128) -> Self {
+        // All tokens created at initialization
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Mintable supply">
+    Allow authorized accounts to mint new tokens:
+    
+    ```rust
+    pub fn mint(&mut self, account_id: AccountId, amount: U128) {
+        require!(env::predecessor_account_id() == self.owner_id);
+        let balance = self.balances.get(&account_id).unwrap_or(0);
+        self.balances.insert(&account_id, &(balance + amount.0));
+        self.total_supply += amount.0;
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Burnable tokens">
+    Allow token holders to burn (destroy) their tokens:
+    
+    ```rust
+    pub fn burn(&mut self, amount: U128) {
+        let account_id = env::predecessor_account_id();
+        let balance = self.balances.get(&account_id).unwrap();
+        require!(balance >= amount.0);
+        self.balances.insert(&account_id, &(balance - amount.0));
+        self.total_supply -= amount.0;
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Marketplace integration
+
+Use your FT to buy NFTs:
+
+```rust
+// In your FT contract
+pub fn ft_transfer_call(
+    &mut self,
+    receiver_id: AccountId,
+    amount: U128,
+    msg: String,
+) -> Promise {
+    // Transfer tokens
+    self.ft_transfer(receiver_id.clone(), amount);
+    
+    // Call receiver's ft_on_transfer
+    ext_receiver::ext(receiver_id)
+        .ft_on_transfer(
+            env::predecessor_account_id(),
+            amount,
+            msg,
+        )
+        .then(
+            Self::ext(env::current_account_id())
+                .ft_resolve_transfer(/* ... */)
+        )
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Start the tutorial" icon="rocket" href="https://near-examples.github.io/ft-tutorial/">
+    Begin building your FT contract
+  </Card>
+  
+  <Card title="FT primitives" icon="coins" href="/primitives/fungible-tokens">
+    Learn about using existing FT contracts
+  </Card>
+  
+  <Card title="NFT tutorial" icon="image" href="/tutorials/nft-tutorial">
+    Build non-fungible token contracts
+  </Card>
+  
+  <Card title="DEX primitives" icon="right-left" href="/primitives/dex">
+    Create token swapping functionality
+  </Card>
+</CardGroup>

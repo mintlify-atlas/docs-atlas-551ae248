@@ -1,0 +1,309 @@
+---
+title: Controlling NEAR accounts from other chains
+description: Learn how to use Chain Signatures to control NEAR accounts from Bitcoin, Ethereum, and other chains
+---
+
+Chain Signatures enable NEAR accounts and smart contracts to sign transactions for other blockchains, including Bitcoin, Ethereum, Solana, and more. This tutorial shows you how to control a NEAR account from another chain.
+
+## Overview
+
+With Chain Signatures, you can:
+- Sign Bitcoin transactions from a NEAR account
+- Control Ethereum addresses from NEAR contracts
+- Create multi-chain applications with unified account management
+- Build cross-chain DeFi products
+
+<CardGroup cols={1}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/near-examples/chainsig-script">
+    View the complete Chain Signatures example
+  </Card>
+</CardGroup>
+
+## How it works
+
+<Steps>
+  <Step title="Derive chain-specific addresses">
+    NEAR accounts can derive addresses for other chains using a path-based system:
+    
+    ```javascript
+    import { setupAdapter } from "@near-relay/client";
+    
+    // Setup
+    const account = await setupAdapter({
+      accountId: "your-account.testnet",
+      privateKey: "ed25519:...",
+      network: "testnet"
+    });
+    
+    // Derive Ethereum address
+    const ethAddress = await account.deriveAddress("ethereum", "your-path");
+    console.log(`Your Ethereum address: ${ethAddress}`);
+    
+    // Derive Bitcoin address
+    const btcAddress = await account.deriveAddress("bitcoin", "your-path");
+    console.log(`Your Bitcoin address: ${btcAddress}`);
+    ```
+    
+    <Info>
+    The derivation path ensures deterministic address generation. The same path always produces the same address.
+    </Info>
+  </Step>
+  
+  <Step title="Create transaction for target chain">
+    Build a transaction for the target blockchain:
+    
+    <Tabs>
+      <Tab title="Ethereum">
+        ```javascript
+        import { ethers } from "ethers";
+        
+        // Create Ethereum transaction
+        const tx = {
+          to: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+          value: ethers.parseEther("0.01"),
+          gasLimit: 21000,
+          gasPrice: await provider.getGasPrice(),
+          nonce: await provider.getTransactionCount(ethAddress),
+          chainId: 1,  // Ethereum mainnet
+        };
+        
+        // Serialize transaction
+        const serializedTx = ethers.Transaction.from(tx).unsignedSerialized;
+        ```
+      </Tab>
+      
+      <Tab title="Bitcoin">
+        ```javascript
+        import * as bitcoin from "bitcoinjs-lib";
+        
+        // Create Bitcoin transaction
+        const psbt = new bitcoin.Psbt({ network: bitcoin.networks.bitcoin });
+        
+        // Add inputs (UTXOs)
+        psbt.addInput({
+          hash: utxo.txid,
+          index: utxo.vout,
+          witnessUtxo: {
+            script: Buffer.from(utxo.scriptPubKey, "hex"),
+            value: utxo.value,
+          },
+        });
+        
+        // Add output
+        psbt.addOutput({
+          address: "bc1q...",
+          value: 100000,  // satoshis
+        });
+        
+        // Get transaction hash to sign
+        const txHash = psbt.data.inputs[0].witnessUtxo.script;
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Request signature from NEAR">
+    Use the NEAR account to sign the transaction:
+    
+    ```javascript
+    // Request signature through Chain Signatures MPC
+    const signature = await account.signTransaction({
+      transaction: serializedTx,
+      path: "your-path",
+      chain: "ethereum"
+    });
+    
+    console.log(`Signature: ${signature}`);
+    ```
+  </Step>
+  
+  <Step title="Broadcast to target chain">
+    Send the signed transaction to the target blockchain:
+    
+    <Tabs>
+      <Tab title="Ethereum">
+        ```javascript
+        // Attach signature to transaction
+        const signedTx = ethers.Transaction.from({
+          ...tx,
+          signature: signature
+        }).serialized;
+        
+        // Broadcast
+        const txHash = await provider.broadcastTransaction(signedTx);
+        console.log(`Transaction: ${txHash}`);
+        ```
+      </Tab>
+      
+      <Tab title="Bitcoin">
+        ```javascript
+        // Add signature to PSBT
+        psbt.updateInput(0, {
+          finalScriptWitness: signature
+        });
+        
+        // Finalize and extract
+        psbt.finalizeAllInputs();
+        const txHex = psbt.extractTransaction().toHex();
+        
+        // Broadcast
+        const txid = await bitcoinRpc.sendRawTransaction(txHex);
+        console.log(`Transaction: ${txid}`);
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Supported chains
+
+<CardGroup cols={3}>
+  <Card title="Ethereum" icon="ethereum">
+    Full support for EVM chains including Ethereum, Polygon, Arbitrum, Optimism
+  </Card>
+  
+  <Card title="Bitcoin" icon="bitcoin">
+    Native Bitcoin support for BTC transactions
+  </Card>
+  
+  <Card title="Solana" icon="circle-s">
+    Solana transaction signing support
+  </Card>
+  
+  <Card title="Cosmos" icon="atom">
+    Support for Cosmos SDK chains
+  </Card>
+  
+  <Card title="Dogecoin" icon="dog">
+    DOGE transaction signing
+  </Card>
+  
+  <Card title="Ripple" icon="wave-square">
+    XRP Ledger support
+  </Card>
+</CardGroup>
+
+## Example: Send ETH from NEAR
+
+Complete example of sending ETH using a NEAR account:
+
+```javascript
+import { setupAdapter } from "@near-relay/client";
+import { ethers } from "ethers";
+
+async function sendEth() {
+  // Initialize NEAR adapter
+  const account = await setupAdapter({
+    accountId: "your-account.testnet",
+    privateKey: process.env.NEAR_PRIVATE_KEY,
+    network: "testnet"
+  });
+  
+  // Derive Ethereum address
+  const ethAddress = await account.deriveAddress("ethereum", "my-eth-account");
+  console.log(`Sending from: ${ethAddress}`);
+  
+  // Setup Ethereum provider
+  const provider = new ethers.JsonRpcProvider("https://eth.llamarpc.com");
+  
+  // Create transaction
+  const tx = {
+    to: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+    value: ethers.parseEther("0.01"),
+    gasLimit: 21000,
+    gasPrice: await provider.getGasPrice(),
+    nonce: await provider.getTransactionCount(ethAddress),
+    chainId: 1,
+  };
+  
+  // Sign with NEAR
+  const serializedTx = ethers.Transaction.from(tx).unsignedSerialized;
+  const signature = await account.signTransaction({
+    transaction: serializedTx,
+    path: "my-eth-account",
+    chain: "ethereum"
+  });
+  
+  // Broadcast
+  const signedTx = ethers.Transaction.from({
+    ...tx,
+    signature
+  }).serialized;
+  
+  const txHash = await provider.broadcastTransaction(signedTx);
+  console.log(`Success! Transaction: ${txHash}`);
+}
+
+sendEth().catch(console.error);
+```
+
+## Using in smart contracts
+
+Smart contracts can also request signatures:
+
+```rust
+use near_sdk::{near, Promise, ext_contract};
+
+#[ext_contract(ext_mpc)]
+trait MpcContract {
+    fn sign(&self, payload: Vec<u8>, path: String, key_version: u32) -> Promise;
+}
+
+#[near]
+impl Contract {
+    pub fn sign_eth_transaction(
+        &self,
+        transaction: Vec<u8>,
+        path: String,
+    ) -> Promise {
+        ext_mpc::ext("v1.signer-prod.testnet".parse().unwrap())
+            .with_static_gas(Gas::from_tgas(250))
+            .sign(transaction, path, 0)
+    }
+}
+```
+
+## Security considerations
+
+<AccordionGroup>
+  <Accordion title="Path security">
+    - Use unique paths for different use cases
+    - Never share paths publicly if they control valuable assets
+    - Consider using account-specific path prefixes
+    - Document your path structure
+  </Accordion>
+  
+  <Accordion title="Key management">
+    - NEAR private keys control all derived addresses
+    - Use hardware wallets for mainnet accounts
+    - Implement access controls for contract-based signing
+    - Audit signature request flows
+  </Accordion>
+  
+  <Accordion title="Transaction validation">
+    - Always verify transaction details before signing
+    - Check recipient addresses carefully
+    - Validate amounts and gas prices
+    - Test with small amounts first
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Multi-chain DAO" icon="users" href="/tutorials/multichain-dao">
+    Build a DAO that governs multiple chains
+  </Card>
+  
+  <Card title="Chain Signatures docs" icon="signature" href="/chain-abstraction/chain-signatures">
+    Learn more about Chain Signatures
+  </Card>
+  
+  <Card title="NEAR Intents" icon="bolt" href="/chain-abstraction/intents">
+    Use intents for cross-chain actions
+  </Card>
+  
+  <Card title="Omnibridge" icon="bridge" href="/chain-abstraction/omnibridge">
+    Bridge assets across chains
+  </Card>
+</CardGroup>

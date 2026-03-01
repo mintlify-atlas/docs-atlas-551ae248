@@ -1,122 +1,180 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "NEAR Protocol",
+  "theme": "palm",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#00C08B",
+    "light": "#00E5A0",
+    "dark": "#00956F"
   },
-  "favicon": "/favicon.svg",
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/near/docs"
+    }
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/near/docs"
+    }
+  },
   "navigation": {
     "tabs": [
       {
-        "tab": "Guides",
+        "tab": "Documentation",
         "groups": [
           {
-            "group": "Getting started",
+            "group": "Getting Started",
             "pages": [
-              "index",
+              "introduction",
               "quickstart",
-              "development"
+              "faucet"
             ]
           },
           {
-            "group": "Customization",
+            "group": "Protocol",
             "pages": [
-              "essentials/settings",
-              "essentials/navigation"
+              "protocol/basics",
+              "protocol/account-model",
+              "protocol/account-id",
+              "protocol/access-keys",
+              "protocol/transactions",
+              "protocol/transaction-anatomy",
+              "protocol/gas",
+              "protocol/storage",
+              "protocol/validators",
+              "protocol/networks",
+              "protocol/architecture"
             ]
           },
           {
-            "group": "Writing content",
+            "group": "Smart Contracts",
             "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
+              "smart-contracts/what-is",
+              "smart-contracts/quickstart",
+              "smart-contracts/anatomy",
+              "smart-contracts/functions",
+              "smart-contracts/storage",
+              "smart-contracts/crosscontract",
+              "smart-contracts/testing",
+              "smart-contracts/security",
+              "smart-contracts/deploy",
+              "smart-contracts/upgrade"
             ]
           },
           {
-            "group": "AI tools",
+            "group": "Web3 Applications",
             "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
+              "web3-apps/what-is",
+              "web3-apps/quickstart",
+              "web3-apps/wallet-login",
+              "web3-apps/integrate-contracts",
+              "web3-apps/backend-login"
+            ]
+          },
+          {
+            "group": "AI and Agents",
+            "pages": [
+              "ai/introduction",
+              "ai/near-mcp",
+              "ai/shade-agents/introduction",
+              "ai/shade-agents/quickstart",
+              "ai/shade-agents/framework-overview",
+              "ai/shade-agents/security",
+              "ai/shade-agents/api-reference"
+            ]
+          },
+          {
+            "group": "Chain Abstraction",
+            "pages": [
+              "chain-abstraction/what-is",
+              "chain-abstraction/chain-signatures",
+              "chain-abstraction/intents",
+              "chain-abstraction/omnibridge",
+              "chain-abstraction/meta-transactions"
+            ]
+          },
+          {
+            "group": "Primitives",
+            "pages": [
+              "primitives/what-is",
+              "primitives/fungible-tokens",
+              "primitives/non-fungible-tokens",
+              "primitives/dao",
+              "primitives/dex",
+              "primitives/oracles",
+              "primitives/staking"
+            ]
+          },
+          {
+            "group": "Data Infrastructure",
+            "pages": [
+              "data-infrastructure/what-is",
+              "data-infrastructure/indexers",
+              "data-infrastructure/near-lake-framework",
+              "data-infrastructure/big-query",
+              "data-infrastructure/data-apis"
             ]
           }
         ]
       },
       {
-        "tab": "API reference",
+        "tab": "API Reference",
         "groups": [
           {
-            "group": "API documentation",
+            "group": "RPC API",
             "pages": [
-              "api-reference/introduction"
+              "api/rpc/introduction",
+              "api/rpc/setup",
+              "api/rpc/providers",
+              "api/rpc/access-keys",
+              "api/rpc/contracts",
+              "api/rpc/transactions",
+              "api/rpc/block-chunk",
+              "api/rpc/gas",
+              "api/rpc/network",
+              "api/rpc/protocol",
+              "api/rpc/errors"
+            ]
+          }
+        ]
+      },
+      {
+        "tab": "Tutorials",
+        "groups": [
+          {
+            "group": "Protocol Basics",
+            "pages": [
+              "tutorials/create-account",
+              "tutorials/importing-account"
             ]
           },
           {
-            "group": "Endpoint examples",
+            "group": "Smart Contracts",
             "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
+              "tutorials/basic-contracts",
+              "tutorials/cross-contract-calls",
+              "tutorials/factory-contracts",
+              "tutorials/update-migrate-state"
+            ]
+          },
+          {
+            "group": "Multi-Chain",
+            "pages": [
+              "tutorials/controlling-near-accounts",
+              "tutorials/multichain-dao"
+            ]
+          },
+          {
+            "group": "Full Stack",
+            "pages": [
+              "tutorials/auction-example",
+              "tutorials/nft-tutorial",
+              "tutorials/ft-tutorial"
             ]
           }
         ]
       }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
-  "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
-    "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
-    }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
-  },
-  "footer": {
-    "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
-    }
+    ]
   }
 }

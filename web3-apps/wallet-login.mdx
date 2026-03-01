@@ -1,0 +1,521 @@
+---
+title: Wallet Login
+sidebarTitle: Wallet Login
+description: Connect users to NEAR wallets with a secure, sandbox-based connector library
+---
+
+The `@hot-labs/near-connect` library provides a secure, zero-dependency wallet connector for NEAR blockchain with a unique sandbox-based architecture.
+
+<Frame>
+  <img src="https://github.com/user-attachments/assets/c4422057-38bb-4cd9-8bd0-568e29f46280" alt="NEAR Connector Preview" />
+</Frame>
+
+<Tip>
+  We have a [working example](https://github.com/near-examples/hello-near-connector), which you can easily get through `create-near-app`:
+  
+  ```bash
+  npx create-near-app@latest
+  ```
+</Tip>
+
+---
+
+## Why NEAR Connect?
+
+Unlike traditional wallet selectors, it offers a dynamic manifest system that allows wallets to be added and updated without requiring developers to update their dependencies.
+
+<CardGroup cols={2}>
+  <Card title="Secure Execution" icon="lock">
+    Wallet scripts run in isolated sandboxed iframes for maximum security
+  </Card>
+  
+  <Card title="Dynamic Wallets" icon="arrows-rotate">
+    Wallets are loaded from a manifest and can be updated without code changes
+  </Card>
+  
+  <Card title="Zero Dependencies" icon="feather">
+    Lightweight library with no external dependencies
+  </Card>
+  
+  <Card title="Automatic Detection" icon="wand-magic-sparkles">
+    Supports both injected wallets (extensions) and manifest-based wallets
+  </Card>
+</CardGroup>
+
+---
+
+## Installation
+
+You can add the NEAR Connect library to your project in two ways:
+
+<Tabs>
+  <Tab title="Library">
+    Install the `@hot-labs/near-connect` and `near-api-js` packages manually:
+
+    ```bash
+    npm install @hot-labs/near-connect near-api-js
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    If you are using React, we recommend installing the `near-connect-hooks` package which provides convenient hooks for integrating NEAR Connect into your app:
+
+    ```bash
+    npm install near-connect-hooks
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Initializing the Connector
+
+Initialize the `NearConnector` instance in your application:
+
+<Tabs>
+  <Tab title="Library">
+    ```tsx
+    import { NearConnector } from '@hot-labs/near-connect';
+
+    const connector = new NearConnector({
+      network: 'testnet',
+      features: {
+        signMessage: true,
+        signTransaction: true,
+      },
+    });
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    ```tsx
+    import { NearProvider } from 'near-connect-hooks';
+
+    export default function App({ Component, pageProps }) {
+      return (
+        <NearProvider network="testnet">
+          <Component {...pageProps} />
+        </NearProvider>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Accordion title="Selecting Wallets">
+  Unlike traditional wallet selectors that bundle wallet code, NEAR Connect uses a **manifest-based approach**:
+
+  1. Wallet providers register their integration scripts in a public manifest
+  2. The connector dynamically loads wallet scripts when users want to connect
+
+  This architecture eliminates the need to install individual wallet packages and ensures wallet code can be updated independently from your app.
+
+  ```tsx
+  connector = new NearConnector({
+    network: "testnet", // or "mainnet"
+    features: {
+      signMessage: true,  // Only show wallets that support message signing
+      signTransaction: true,
+      signInWithoutAddKey: true,
+      signAndSendTransaction: true,
+      signAndSendTransactions: true
+    },
+  });
+  ```
+</Accordion>
+
+---
+
+## Signing In / Out
+
+<Tabs>
+  <Tab title="Library">
+    The connector uses the Observer Pattern (pub/sub), for which we need to subscribe to the `wallet:signIn` and `wallet:signOut` events:
+    
+    ```tsx
+    connector.on('wallet:signIn', ({ accountId }) => {
+      console.log('Signed in:', accountId);
+    });
+
+    connector.on('wallet:signOut', () => {
+      console.log('Signed out');
+    });
+    ```
+
+    Then, call the `connect` function to open a modal where the user can select a wallet and sign in, and `disconnect` to sign out:
+
+    ```tsx
+    // Sign in
+    await connector.connect();
+
+    // Sign out
+    await connector.disconnect();
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    The `near-connect-hooks` package provides a `useNearWallet` hook that simplifies the sign-in process:
+    
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+
+    function Navigation() {
+      const { signIn, signOut, accountId, isConnected } = useNearWallet();
+
+      return (
+        <nav>
+          {isConnected ? (
+            <button onClick={signOut}>
+              Disconnect {accountId}
+            </button>
+          ) : (
+            <button onClick={signIn}>Connect Wallet</button>
+          )}
+        </nav>
+      );
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Calling Contract Methods
+
+<Tabs>
+  <Tab title="Library">
+    To call a contract method, first get the connected wallet instance using `connector.wallet()`, then use the wallet's `signAndSendTransaction` method to make a function call:
+
+    ```tsx
+    // Get the connected wallet
+    const wallet = await connector.wallet();
+
+    // Call a change method
+    const result = await wallet.signAndSendTransaction({
+      receiverId: "hello.near-examples.testnet",
+      actions: [
+        {
+          type: "FunctionCall",
+          params: {
+            methodName: "set_greeting",
+            args: { greeting: "Hello from NEAR Connect!" },
+            gas: "30000000000000", // 30 TGas
+            deposit: "0", // No deposit
+          },
+        },
+      ],
+    });
+
+    console.log("Transaction:", result.transaction.hash);
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    To call a contract method, you can use the `callFunction` method provided by the `useNearWallet` hook:
+    
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+
+    function GreetingForm() {
+      const { callFunction } = useNearWallet();
+
+      const handleSubmit = async (greeting) => {
+        await callFunction({
+          contractId: 'hello.near-examples.testnet',
+          method: 'set_greeting',
+          args: { greeting },
+          gas: '30000000000000',
+          deposit: '0',
+        });
+      };
+
+      return <form onSubmit={handleSubmit}>...</form>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Calling Read-only Methods
+
+<Tabs>
+  <Tab title="Library">
+    The `near-connector` does not provide a built-in way to call read-only (view) methods.
+
+    However, you can use the `near-api-js` package (or any of your preferred APIs) to create a JSON-RPC provider and call view methods directly:
+
+    ```tsx
+    import { JsonRpcProvider } from "near-api-js";
+
+    const provider = new JsonRpcProvider({ 
+      url: "https://test.rpc.fastnear.com" 
+    });
+
+    const greeting = await provider.callFunction(
+      "hello.near-examples.testnet",
+      "get_greeting",
+      {}
+    );
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    You can use the `viewFunction` method provided by the `useNearWallet` hook to call read-only methods on the contract:
+
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+    import { useEffect, useState } from 'react';
+
+    function GreetingDisplay() {
+      const { viewFunction } = useNearWallet();
+      const [greeting, setGreeting] = useState('');
+
+      useEffect(() => {
+        viewFunction({ 
+          contractId: 'hello.near-examples.testnet', 
+          method: 'get_greeting' 
+        }).then(setGreeting);
+      }, [viewFunction]);
+
+      return <p>{greeting}</p>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Get Balance
+
+<Tabs>
+  <Tab title="Library">
+    The `near-connector` does not provide a built-in way to get the account balance.
+
+    However, you can use the `near-api-js` package (or any of your preferred APIs) to create a JSON-RPC provider and query the account balance directly:
+
+    ```tsx
+    import { JsonRpcProvider } from "near-api-js";
+
+    const provider = new JsonRpcProvider({ 
+      url: "https://test.rpc.fastnear.com" 
+    });
+
+    const account = await provider.viewAccount({ 
+      accountId: "hello.near-examples.testnet" 
+    });
+    
+    console.log("Balance:", account.amount);
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    You can use the `getBalance` method provided by the `useNearWallet` hook to get the user's balance:
+
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+    import { yoctoToNear } from 'near-api-js';
+
+    function BalanceDisplay() {
+      const { getBalance } = useNearWallet();
+      const [balance, setBalance] = useState('');
+
+      useEffect(() => {
+        getBalance().then((b) => {
+          setBalance(yoctoToNear(b.available, 2));
+        });
+      }, [getBalance]);
+
+      return <p>Balance: {balance} NEAR</p>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Send Multiple Transactions
+
+<Tabs>
+  <Tab title="Library">
+    You can request the user to sign and send multiple transactions in parallel through a single prompt:
+
+    ```tsx
+    const wallet = await connector.wallet();
+
+    const results = await wallet.signAndSendTransactions({
+      transactions: [
+        {
+          receiverId: "token.near",
+          actions: [
+            {
+              type: "FunctionCall",
+              params: {
+                methodName: "ft_transfer",
+                args: {
+                  receiver_id: "alice.near",
+                  amount: "1000000",
+                },
+                gas: "30000000000000",
+                deposit: "1", // 1 yoctoNEAR for security
+              },
+            },
+          ],
+        },
+        {
+          receiverId: "nft.near",
+          actions: [
+            {
+              type: "FunctionCall",
+              params: {
+                methodName: "nft_mint",
+                args: {
+                  token_id: "token-1",
+                  receiver_id: "alice.near",
+                },
+                gas: "30000000000000",
+                deposit: "10000000000000000000000", // 0.01 NEAR
+              },
+            },
+          ],
+        },
+      ],
+    });
+
+    console.log(`Completed ${results.length} transactions`);
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    You can use the `signAndSendTransactions` method provided by the `useNearWallet` hook to send multiple transactions in a single request:
+
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+
+    function BatchTransactions() {
+      const { signAndSendTransactions } = useNearWallet();
+
+      const handleBatch = async () => {
+        const results = await signAndSendTransactions({
+          transactions: [
+            {
+              receiverId: "token.near",
+              actions: [
+                {
+                  type: "FunctionCall",
+                  params: {
+                    methodName: "ft_transfer",
+                    args: {
+                      receiver_id: "alice.near",
+                      amount: "1000000",
+                    },
+                    gas: "30000000000000",
+                    deposit: "1",
+                  },
+                },
+              ],
+            },
+            {
+              receiverId: "nft.near",
+              actions: [
+                {
+                  type: "FunctionCall",
+                  params: {
+                    methodName: "nft_mint",
+                    args: {
+                      token_id: "token-1",
+                      receiver_id: "alice.near",
+                    },
+                    gas: "30000000000000",
+                    deposit: "10000000000000000000000",
+                  },
+                },
+              ],
+            },
+          ],
+        });
+        
+        console.log(`Completed ${results.length} transactions`);
+      };
+
+      return <button onClick={handleBatch}>Send Batch</button>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Sign Messages (NEP-413)
+
+In NEAR, users can sign messages for authentication purposes without needing to send a transaction:
+
+<Tabs>
+  <Tab title="Library">
+    You can request the user to sign a message using the wallet's `signMessage` method:
+
+    ```tsx
+    const wallet = await connector.wallet();
+
+    const signature = await wallet.signMessage({
+      message: "Please sign this message to authenticate",
+      recipient: "your-app.near",
+      nonce: Buffer.from(crypto.randomUUID()),
+    });
+
+    console.log("Signature:", signature.signature);
+    console.log("Public Key:", signature.publicKey);
+
+    // Verify the signature on your backend
+    ```
+  </Tab>
+  
+  <Tab title="React Hooks">
+    You can use the `signNEP413Message` method provided by the `useNearWallet` hook to request the user to sign a message:
+
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+
+    function MessageSigner() {
+      const { signNEP413Message } = useNearWallet();
+
+      const handleSign = async () => {
+        const signature = await signNEP413Message({
+          message: "Please sign this message to authenticate",
+          recipient: "your-app.near",
+          nonce: Buffer.from(crypto.randomUUID()),
+        });
+
+        console.log("Signature:", signature.signature);
+        console.log("Public Key:", signature.publicKey);
+      };
+
+      return <button onClick={handleSign}>Sign Message</button>;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Note>
+  Message signing is supported by wallets that implement NEP-413, including Meteor Wallet, Here Wallet, MyNearWallet, and others.
+</Note>
+
+---
+
+## Alternative: Social Login
+
+For applications that need to onboard non-crypto users, consider using social login providers:
+
+<CardGroup cols={2}>
+  <Card title="Privy" icon="user-shield" href="https://github.com/near-examples/hello-privy/">
+    Login with email or social accounts (Google, Twitter, etc.)
+  </Card>
+  
+  <Card title="Web3Auth" icon="key" href="https://github.com/near-examples/hello-web3auth/">
+    Alternative social login with Web3Auth integration
+  </Card>
+</CardGroup>
+
+<Tip>
+  Both Privy and Web3Auth automatically create NEAR wallets for users upon login, providing a seamless onboarding experience.
+</Tip>

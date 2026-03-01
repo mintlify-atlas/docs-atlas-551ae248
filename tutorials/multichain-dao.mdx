@@ -1,0 +1,382 @@
+---
+title: Multi-chain DAO governance
+description: Build a DAO on NEAR that can govern assets and execute actions across multiple blockchains
+---
+
+Create a decentralized autonomous organization (DAO) on NEAR that can control assets and execute transactions across multiple blockchains using Chain Signatures.
+
+## Overview
+
+This tutorial demonstrates how to build a DAO that:
+- Votes on proposals using NEAR
+- Executes actions on Ethereum, Bitcoin, and other chains
+- Manages multi-chain treasuries
+- Coordinates cross-chain DeFi strategies
+
+<CardGroup cols={1}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/near-examples/multichain-dao">
+    View the complete Multi-chain DAO example
+  </Card>
+</CardGroup>
+
+## Architecture
+
+The Multi-chain DAO consists of three main components:
+
+<Steps>
+  <Step title="DAO Contract (NEAR)">
+    Handles governance, voting, and proposal management
+    
+    ```rust
+    #[near(contract_state)]
+    pub struct MultiChainDao {
+        proposals: UnorderedMap<u64, Proposal>,
+        members: UnorderedSet<AccountId>,
+        voting_threshold: u8,
+    }
+    ```
+  </Step>
+  
+  <Step title="Chain Signatures Integration">
+    Connects to NEAR's MPC network to sign transactions for other chains
+    
+    ```rust
+    pub fn execute_proposal(&mut self, proposal_id: u64) -> Promise {
+        let proposal = self.proposals.get(&proposal_id).unwrap();
+        require!(proposal.approved, "Proposal not approved");
+        
+        // Sign transaction for target chain
+        ext_mpc::ext("v1.signer-prod.testnet".parse().unwrap())
+            .sign(proposal.payload, proposal.path, 0)
+    }
+    ```
+  </Step>
+  
+  <Step title="Transaction Broadcaster">
+    Sends signed transactions to target blockchains
+    
+    ```javascript
+    // After getting signature from NEAR
+    const signedTx = attachSignature(transaction, signature);
+    const txHash = await targetChain.broadcastTransaction(signedTx);
+    ```
+  </Step>
+</Steps>
+
+## Creating proposals
+
+<Tabs>
+  <Tab title="Ethereum proposal">
+    ```javascript
+    // Propose sending ETH
+    const ethTx = {
+      to: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+      value: ethers.parseEther("1.0"),
+      gasLimit: 21000,
+    };
+    
+    await dao.call("create_proposal", {
+      title: "Send 1 ETH to treasury manager",
+      description: "Funding for Q1 operations",
+      chain: "ethereum",
+      transaction: ethTx,
+      path: "dao-eth-treasury"
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Bitcoin proposal">
+    ```javascript
+    // Propose sending BTC
+    const btcTx = {
+      to: "bc1q...",
+      value: 100000,  // satoshis
+      utxos: [...],
+    };
+    
+    await dao.call("create_proposal", {
+      title: "Send 0.001 BTC to contractor",
+      description: "Payment for development work",
+      chain: "bitcoin",
+      transaction: btcTx,
+      path: "dao-btc-treasury"
+    });
+    ```
+  </Tab>
+  
+  <Tab title="Smart contract interaction">
+    ```javascript
+    // Propose calling a smart contract
+    const contractCall = {
+      to: "0xContractAddress...",
+      data: contractInterface.encodeFunctionData("transferOwnership", [
+        "0xNewOwner..."
+      ]),
+      value: 0,
+    };
+    
+    await dao.call("create_proposal", {
+      title: "Transfer NFT contract ownership",
+      description: "Move to new multisig",
+      chain: "ethereum",
+      transaction: contractCall,
+      path: "dao-eth-treasury"
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Voting on proposals
+
+<Steps>
+  <Step title="DAO members vote">
+    ```bash
+    near contract call-function as-transaction dao.testnet \
+      vote \
+      json-args '{"proposal_id": 1, "vote": "approve"}' \
+      prepaid-gas '30 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    ```
+  </Step>
+  
+  <Step title="Proposal reaches threshold">
+    Once enough members vote, the proposal is approved:
+    
+    ```rust
+    pub fn vote(&mut self, proposal_id: u64, vote: Vote) {
+        let mut proposal = self.proposals.get(&proposal_id).unwrap();
+        require!(!proposal.executed, "Already executed");
+        
+        proposal.votes.insert(env::predecessor_account_id(), vote);
+        
+        // Check if threshold reached
+        let approvals = proposal.votes.values()
+            .filter(|v| **v == Vote::Approve)
+            .count();
+            
+        if approvals * 100 / self.members.len() >= self.voting_threshold as usize {
+            proposal.approved = true;
+        }
+        
+        self.proposals.insert(proposal_id, proposal);
+    }
+    ```
+  </Step>
+  
+  <Step title="Execute approved proposal">
+    Anyone can trigger execution once approved:
+    
+    ```bash
+    near contract call-function as-transaction dao.testnet \
+      execute_proposal \
+      json-args '{"proposal_id": 1}' \
+      prepaid-gas '300 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    ```
+  </Step>
+</Steps>
+
+## Complete example
+
+### DAO Contract
+
+```rust
+use near_sdk::{
+    near, env, require, AccountId, Promise,
+    collections::{UnorderedMap, UnorderedSet},
+    borsh::{BorshDeserialize, BorshSerialize},
+};
+
+#[near(serializers = [json, borsh])]
+pub struct Proposal {
+    pub id: u64,
+    pub title: String,
+    pub description: String,
+    pub chain: String,
+    pub transaction: Vec<u8>,
+    pub path: String,
+    pub votes: UnorderedMap<AccountId, Vote>,
+    pub approved: bool,
+    pub executed: bool,
+}
+
+#[near(serializers = [json, borsh])]
+pub enum Vote {
+    Approve,
+    Reject,
+    Abstain,
+}
+
+#[near(contract_state)]
+pub struct MultiChainDao {
+    proposals: UnorderedMap<u64, Proposal>,
+    members: UnorderedSet<AccountId>,
+    voting_threshold: u8,  // Percentage needed to pass
+    next_proposal_id: u64,
+}
+
+#[near]
+impl MultiChainDao {
+    #[init]
+    pub fn new(members: Vec<AccountId>, voting_threshold: u8) -> Self {
+        require!(voting_threshold <= 100, "Invalid threshold");
+        
+        let mut member_set = UnorderedSet::new(b"m");
+        for member in members {
+            member_set.insert(member);
+        }
+        
+        Self {
+            proposals: UnorderedMap::new(b"p"),
+            members: member_set,
+            voting_threshold,
+            next_proposal_id: 0,
+        }
+    }
+    
+    pub fn create_proposal(
+        &mut self,
+        title: String,
+        description: String,
+        chain: String,
+        transaction: Vec<u8>,
+        path: String,
+    ) -> u64 {
+        require!(
+            self.members.contains(&env::predecessor_account_id()),
+            "Only members can create proposals"
+        );
+        
+        let proposal = Proposal {
+            id: self.next_proposal_id,
+            title,
+            description,
+            chain,
+            transaction,
+            path,
+            votes: UnorderedMap::new(b"v"),
+            approved: false,
+            executed: false,
+        };
+        
+        self.proposals.insert(self.next_proposal_id, proposal);
+        self.next_proposal_id += 1;
+        
+        self.next_proposal_id - 1
+    }
+    
+    pub fn vote(&mut self, proposal_id: u64, vote: Vote) {
+        require!(
+            self.members.contains(&env::predecessor_account_id()),
+            "Only members can vote"
+        );
+        
+        let mut proposal = self.proposals.get(&proposal_id)
+            .expect("Proposal not found");
+        require!(!proposal.executed, "Proposal already executed");
+        
+        proposal.votes.insert(env::predecessor_account_id(), vote);
+        
+        // Calculate approval percentage
+        let approvals = proposal.votes.iter()
+            .filter(|(_, v)| matches!(v, Vote::Approve))
+            .count();
+        
+        let approval_pct = (approvals * 100) / self.members.len();
+        if approval_pct >= self.voting_threshold as usize {
+            proposal.approved = true;
+        }
+        
+        self.proposals.insert(proposal_id, proposal);
+    }
+    
+    pub fn execute_proposal(&mut self, proposal_id: u64) -> Promise {
+        let mut proposal = self.proposals.get(&proposal_id)
+            .expect("Proposal not found");
+        require!(proposal.approved, "Proposal not approved");
+        require!(!proposal.executed, "Already executed");
+        
+        proposal.executed = true;
+        self.proposals.insert(proposal_id, proposal.clone());
+        
+        // Request signature from Chain Signatures MPC
+        ext_mpc::ext("v1.signer-prod.testnet".parse().unwrap())
+            .with_static_gas(Gas::from_tgas(250))
+            .sign(proposal.transaction, proposal.path, 0)
+    }
+}
+```
+
+## Benefits of Multi-chain DAOs
+
+<CardGroup cols={2}>
+  <Card title="Unified governance" icon="gavel">
+    Manage assets across multiple chains from a single DAO interface
+  </Card>
+  
+  <Card title="Cost efficiency" icon="dollar-sign">
+    Vote on NEAR with low transaction fees, execute anywhere
+  </Card>
+  
+  <Card title="Security" icon="shield">
+    MPC-based signatures eliminate single points of failure
+  </Card>
+  
+  <Card title="Flexibility" icon="wand-magic-sparkles">
+    Add support for new chains without deploying new contracts
+  </Card>
+</CardGroup>
+
+## Use cases
+
+<AccordionGroup>
+  <Accordion title="Treasury management">
+    - Hold assets across multiple chains
+    - Diversify investments in different DeFi protocols
+    - Execute rebalancing strategies
+    - Manage NFT collections on various chains
+  </Accordion>
+  
+  <Accordion title="Protocol governance">
+    - Control protocol upgrades on multiple chains
+    - Manage parameter changes across deployments
+    - Coordinate cross-chain protocol migrations
+    - Unified fee collection and distribution
+  </Accordion>
+  
+  <Accordion title="Investment DAOs">
+    - Pool funds across chains
+    - Execute trades on different DEXs
+    - Manage LP positions on various protocols
+    - Coordinate yield farming strategies
+  </Accordion>
+  
+  <Accordion title="Grant programs">
+    - Distribute funds in recipient's preferred chain/token
+    - Pay contributors across ecosystems
+    - Fund development on multiple chains
+    - Track spending across all chains
+  </Accordion>
+</AccordionGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Chain Signatures" icon="signature" href="/chain-abstraction/chain-signatures">
+    Deep dive into multi-chain signatures
+  </Card>
+  
+  <Card title="DAO primitives" icon="users" href="/primitives/dao">
+    Learn about NEAR DAO frameworks
+  </Card>
+  
+  <Card title="Cross-chain transfers" icon="arrows-rotate" href="/tutorials/controlling-near-accounts">
+    Control accounts on other chains
+  </Card>
+  
+  <Card title="NEAR Intents" icon="bolt" href="/chain-abstraction/intents">
+    Simplify cross-chain operations
+  </Card>
+</CardGroup>

@@ -1,0 +1,434 @@
+---
+title: Contract Functions
+description: Learn how to define your contract's interface with different function types including read-only, private, and payable functions.
+---
+
+Smart contracts expose functions so users can interact with them. There are different types of functions including **read-only**, **private**, and **payable** functions.
+
+## Contract Interface
+
+All **public** functions in the contract are part of its **interface**. They can be called by anyone and are the only way to interact with the contract.
+
+<Note>
+Every public function becomes part of the contract's ABI (Application Binary Interface) and can be called by external accounts or other contracts.
+</Note>
+
+---
+
+## Initialization Functions
+
+A contract can have an initialization function. If present, this function must be called before any other to initialize the contract state.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, PanicOnDefault};
+
+    #[near(contract_state)]
+    #[derive(PanicOnDefault)]
+    pub struct Contract {
+        owner: AccountId,
+        data: String,
+    }
+
+    #[near]
+    impl Contract {
+        #[init]
+        #[private]
+        pub fn init(owner: AccountId) -> Self {
+            Self {
+                owner,
+                data: String::new(),
+            }
+        }
+    }
+    ```
+
+    <Info>
+    The initialization function is marked with the `#[init]` macro. The `#[derive(PanicOnDefault)]` ensures the contract can't be used without initialization.
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, initialize, near } from 'near-sdk-js';
+
+    @NearBindgen({ requireInit: true })
+    class Contract {
+      owner = '';
+      data = '';
+
+      @initialize({ privateFunction: true })
+      init({ owner }) {
+        this.owner = owner;
+        this.data = '';
+      }
+    }
+    ```
+
+    <Info>
+    The initialization function is marked with the `@initialize` decorator. Setting `requireInit: true` in `@NearBindgen` ensures initialization is required.
+    </Info>
+  </Tab>
+</Tabs>
+
+<Tip>
+It's a good practice to mark initialization functions as private so only the contract account can initialize the contract.
+</Tip>
+
+---
+
+## State-Changing Functions
+
+Functions that modify the state or perform actions need to be called by a user with a NEAR account, since a transaction is required to execute them.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env};
+
+    #[near]
+    impl Contract {
+        // State-changing function takes &mut self
+        pub fn set_data(&mut self, data: String) {
+            let caller = env::predecessor_account_id();
+            near_sdk::log!("Data updated by {}", caller);
+            self.data = data;
+        }
+
+        pub fn increment_counter(&mut self) {
+            self.counter += 1;
+        }
+    }
+    ```
+
+    <Info>
+    State-changing functions take a **mutable** reference to `self` (`&mut self`).
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, call, near } from 'near-sdk-js';
+
+    @NearBindgen({})
+    class Contract {
+      data = '';
+      counter = 0;
+
+      @call({})
+      set_data({ data }) {
+        const caller = near.predecessorAccountId();
+        near.log(`Data updated by ${caller}`);
+        this.data = data;
+      }
+
+      @call({})
+      increment_counter() {
+        this.counter += 1;
+      }
+    }
+    ```
+
+    <Info>
+    State-changing functions are marked with the `@call({})` decorator.
+    </Info>
+  </Tab>
+</Tabs>
+
+---
+
+## Read-Only Functions
+
+Read-only functions don't modify the state. Calling them is **free for everyone** and does not require a NEAR account.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[near]
+    impl Contract {
+        // Read-only function takes &self
+        pub fn get_data(&self) -> String {
+            self.data.clone()
+        }
+
+        pub fn get_counter(&self) -> u64 {
+            self.counter
+        }
+
+        pub fn get_owner(&self) -> AccountId {
+            self.owner.clone()
+        }
+    }
+    ```
+
+    <Info>
+    Read-only functions take an **immutable** reference to `self` (`&self`).
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      @view({})
+      get_data() {
+        return this.data;
+      }
+
+      @view({})
+      get_counter() {
+        return this.counter;
+      }
+
+      @view({})
+      get_owner() {
+        return this.owner;
+      }
+    }
+    ```
+
+    <Info>
+    Read-only functions are marked with the `@view({})` decorator.
+    </Info>
+  </Tab>
+</Tabs>
+
+<Warning>
+View methods have a default gas limit of 200 TGas for execution.
+</Warning>
+
+---
+
+## Private Functions
+
+Many times you want functions that are exposed as part of the contract's interface but should not be called directly by users. Callbacks from cross-contract calls should always be private.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, Promise, Gas};
+
+    #[near]
+    impl Contract {
+        // Public function that calls external contract
+        pub fn external_call(&self) -> Promise {
+            ext_contract::ext("external.near".parse().unwrap())
+                .with_static_gas(Gas::from_tgas(5))
+                .some_method()
+                .then(
+                    Self::ext(env::current_account_id())
+                        .with_static_gas(Gas::from_tgas(5))
+                        .callback_handler()
+                )
+        }
+
+        // Private callback function
+        #[private]
+        pub fn callback_handler(&mut self) {
+            // Handle callback result
+            near_sdk::log!("Callback executed");
+        }
+    }
+    ```
+
+    <Info>
+    Private functions are marked using the `#[private]` macro in Rust.
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      @call({})
+      external_call() {
+        const promise = near.promiseBatchCreate("external.near");
+        near.promiseBatchActionFunctionCall(
+          promise,
+          "some_method",
+          JSON.stringify({}),
+          0,
+          5_000_000_000_000
+        );
+        return near.promiseThen(
+          promise,
+          near.currentAccountId(),
+          "callback_handler",
+          JSON.stringify({}),
+          0,
+          5_000_000_000_000
+        );
+      }
+
+      @call({ privateFunction: true })
+      callback_handler() {
+        near.log("Callback executed");
+      }
+    }
+    ```
+
+    <Info>
+    Private functions are marked by setting `privateFunction: true` in the decorator.
+    </Info>
+  </Tab>
+</Tabs>
+
+<Warning>
+Always mark callback functions as private to ensure they can only be called by the contract itself.
+</Warning>
+
+---
+
+## Payable Functions
+
+By default, functions will panic if the user attaches NEAR tokens to the call. Functions that accept NEAR tokens must be marked as **payable**.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, NearToken, Promise};
+
+    #[near]
+    impl Contract {
+        #[payable]
+        pub fn donate(&mut self) -> NearToken {
+            let donor = env::predecessor_account_id();
+            let amount = env::attached_deposit();
+
+            near_sdk::log!("Received {} from {}", amount, donor);
+
+            // Store the donation
+            self.donations.insert(donor, amount);
+
+            amount
+        }
+
+        #[payable]
+        pub fn purchase_item(&mut self, item_id: u64) {
+            let payment = env::attached_deposit();
+            assert!(payment >= self.get_item_price(item_id), "Insufficient payment");
+
+            // Process purchase
+            self.process_purchase(item_id);
+        }
+    }
+    ```
+
+    <Info>
+    Payable functions are marked using the `#[payable]` macro in Rust.
+    </Info>
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      @call({ payableFunction: true })
+      donate() {
+        const donor = near.predecessorAccountId();
+        const amount = near.attachedDeposit();
+
+        near.log(`Received ${amount} from ${donor}`);
+
+        // Store the donation
+        this.donations.set(donor, amount);
+
+        return amount;
+      }
+
+      @call({ payableFunction: true })
+      purchase_item({ item_id }) {
+        const payment = near.attachedDeposit();
+        assert(payment >= this.get_item_price(item_id), "Insufficient payment");
+
+        // Process purchase
+        this.process_purchase(item_id);
+      }
+    }
+    ```
+
+    <Info>
+    Payable functions are marked by setting `payableFunction: true` in the `@call` decorator.
+    </Info>
+  </Tab>
+</Tabs>
+
+<Tip>
+Within payable functions, use the environment methods to access the attached deposit amount.
+</Tip>
+
+---
+
+## Pure Functions
+
+Pure functions don't require access to the contract state and can return hardcoded values.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    const CONTRACT_VERSION: &str = "1.0.0";
+
+    #[near]
+    impl Contract {
+        pub fn get_version() -> String {
+            CONTRACT_VERSION.to_string()
+        }
+
+        pub fn calculate_fee(amount: u128) -> u128 {
+            amount / 100  // 1% fee
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @NearBindgen({})
+    class Contract {
+      @view({})
+      get_version() {
+        return "1.0.0";
+      }
+
+      @view({})
+      calculate_fee({ amount }) {
+        return amount / 100n;  // 1% fee
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Info>
+Pure functions don't access `self` and can be useful for returning constants or performing calculations.
+</Info>
+
+---
+
+## Function Naming Convention
+
+<Warning>
+**Best Practice: Use snake_case**
+
+When naming methods, use `snake_case` in all SDKs as this is compatible with the remainder of the NEAR ecosystem which is predominantly comprised of Rust contracts.
+
+Examples:
+- ✅ `get_balance()`
+- ✅ `transfer_token()`
+- ❌ `getBalance()`
+- ❌ `transferToken()`
+</Warning>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Storage" icon="database" href="/smart-contracts/storage">
+    Learn about state management
+  </Card>
+  <Card title="Cross-Contract Calls" icon="network-wired" href="/smart-contracts/crosscontract">
+    Call other contracts
+  </Card>
+  <Card title="Testing" icon="flask" href="/smart-contracts/testing">
+    Test your functions
+  </Card>
+  <Card title="Security" icon="shield" href="/smart-contracts/security">
+    Security best practices
+  </Card>
+</CardGroup>

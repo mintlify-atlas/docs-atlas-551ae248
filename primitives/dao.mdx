@@ -1,0 +1,299 @@
+---
+title: Decentralized Autonomous Organizations
+description: Learn about Decentralized Autonomous Organizations (DAOs) on NEAR - self-organized groups that coordinate membership, decision-making, and funding through smart contract voting.
+---
+
+Decentralized Autonomous Organizations (DAOs) are self-organized groups that form around common purposes. Membership, decision-making, and funding are coordinated by publicly voting on proposals through a smart contract.
+
+<img src="/images/primitives/dao-diagram.png" alt="DAO Structure" />
+
+In contrast with FT and NFT, DAO contracts are not standardized. On this page, we use the [Sputnik DAO contract](https://github.com/near-daos/sputnik-dao-contract) as reference. The main concepts covered here should be easily generalizable to other DAO implementations.
+
+<Tip>
+The simplest way to create and interact with a DAO is through the [AstraDAO UI](https://near.social/astraplusplus.ndctools.near/widget/home?page=daos).
+</Tip>
+
+---
+
+## Create a DAO
+
+You can create a DAO by interacting with the `sputnik-dao` factory contract:
+
+<CodeGroup>
+```bash CLI
+export COUNCIL='["bob.near"]'
+export ARGS=`echo '{"config": {"name": "Primitives", "purpose": "Building primitives on NEAR", "metadata":""}, "policy": '$COUNCIL'}' | base64`
+
+near call sputnikv2.testnet create "{\"name\": \"primitives\", \"args\": \"$ARGS\"}" --accountId bob.near --amount 6 --gas 150000000000000
+```
+
+```javascript JavaScript
+import { encode } from 'base-64';
+
+const DAO_FACTORY_CONTRACT_ADDRESS = 'sputnik-dao.near';
+
+const args = {
+  name: 'primitives',
+  args: encode(JSON.stringify({
+    config: {
+      name: 'Primitives',
+      purpose: 'Building primitives on NEAR',
+      metadata: '',
+    },
+    policy: ['bob.near'],
+  })),
+};
+
+await wallet.signAndSendTransaction({
+  receiverId: DAO_FACTORY_CONTRACT_ADDRESS,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'create',
+      args,
+      gas: '300000000000000',
+      deposit: '6000000000000000000000000',
+    }
+  }]
+});
+```
+
+```rust Rust Contract
+#[ext_contract(ext_dao_factory_contract)]
+trait ExternalDaoFactoryContract {
+  fn create(&mut self, name: AccountId, args: Base64VecU8) -> Promise;
+}
+
+#[near]
+impl Contract {
+  #[payable]
+  pub fn create_dao(&mut self, name: AccountId, args: Base64VecU8) -> Promise {
+    let promise = ext_dao_factory_contract::ext(self.dao_factory_contract.clone())
+      .with_attached_deposit(env::attached_deposit())
+      .with_static_gas(Gas(30 * TGAS))
+      .create(name, args);
+
+    promise.then(
+      Self::ext(env::current_account_id())
+        .with_static_gas(Gas(50 * TGAS))
+        .external_common_callback()
+    )
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+Find the full list of [roles and permissions here](https://github.com/near-daos/sputnik-dao-contract#roles-and-permissions).
+</Note>
+
+### Voting Policy
+
+DAOs support two voting policies: `TokenWeight` and `RoleWeight`.
+
+**TokenWeight**: Council votes using tokens. The weight of a vote is the proportion of tokens used for voting over the token's total supply.
+
+**RoleWeight(role)**: Vote weight is computed as "one over the total number of people with the role".
+
+Both policies include a `threshold` for passing a proposal, which can be a ratio or a fixed number.
+
+---
+
+## List of DAOs
+
+Query the list of DAOs existing in Sputnik DAO:
+
+<CodeGroup>
+```bash CLI
+near view sputnik-dao.near get_dao_list '{}'
+```
+
+```javascript JavaScript
+const DAO_FACTORY_CONTRACT_ADDRESS = 'sputnik-dao.near';
+
+const daoList = await wallet.viewMethod({
+  contractId: DAO_FACTORY_CONTRACT_ADDRESS,
+  method: 'get_dao_list',
+  args: {},
+});
+
+console.log(daoList);
+// [
+//   'ref-finance.sputnik-dao.near',
+//   'gaming-dao.sputnik-dao.near',
+//   ...
+// ]
+```
+</CodeGroup>
+
+---
+
+## Query Existing Proposals
+
+Query the proposals existing in a particular DAO:
+
+<CodeGroup>
+```bash CLI
+near view nearweek-news-contribution.sputnik-dao.near get_proposals '{"from_index": 9262, "limit": 2}'
+```
+
+```javascript JavaScript
+const DAO_CONTRACT_ADDRESS = 'nearweek-news-contribution.sputnik-dao.near';
+
+const proposals = await wallet.viewMethod({
+  contractId: DAO_CONTRACT_ADDRESS,
+  method: 'get_proposals',
+  args: { from_index: 9262, limit: 2 },
+});
+
+console.log(proposals);
+```
+</CodeGroup>
+
+Example response:
+```json
+[
+  {
+    "id": 9262,
+    "proposer": "pasternag.near",
+    "description": "NEAR integration announcement",
+    "kind": {
+      "Transfer": {
+        "token_id": "",
+        "receiver_id": "pasternag.near",
+        "amount": "500000000000000000000000"
+      }
+    },
+    "status": "Approved",
+    "vote_counts": { "council": [1, 0, 0] },
+    "votes": { "brzk-93444.near": "Approve" }
+  }
+]
+```
+
+---
+
+## Create Proposal
+
+Create a proposal so other users can vote in favor or against it:
+
+<CodeGroup>
+```bash CLI
+near call primitives.sputnik-dao.near add_proposal '{
+  "proposal": {
+    "description": "My first proposal",
+    "kind": {
+      "Transfer": {
+        "token_id": "",
+        "receiver_id": "bob.near",
+        "amount": "10000000000000000000000000"
+      }
+    }
+  }
+}' --deposit 0.1 --gas 300000000000000 --accountId bob.near
+```
+
+```javascript JavaScript
+const DAO_CONTRACT_ADDRESS = 'primitives.sputnik-dao.near';
+
+await wallet.signAndSendTransaction({
+  receiverId: DAO_CONTRACT_ADDRESS,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'add_proposal',
+      args: {
+        proposal: {
+          description: 'My first proposal',
+          kind: {
+            Transfer: {
+              token_id: '',
+              receiver_id: 'bob.near',
+              amount: '10000000000000000000000000',
+            },
+          },
+        },
+      },
+      gas: '300000000000000',
+      deposit: '100000000000000000000000',
+    }
+  }]
+});
+```
+</CodeGroup>
+
+<Note>
+By default, only **council members** can create proposals.
+</Note>
+
+---
+
+## Vote for Proposal
+
+Cast a vote for a proposal of a particular DAO:
+
+<CodeGroup>
+```bash CLI
+near call primitives.sputnik-dao.near act_proposal '{
+  "id": 0,
+  "action": "VoteApprove"
+}' --gas 300000000000000 --accountId bob.near
+```
+
+```javascript JavaScript
+const DAO_CONTRACT_ADDRESS = 'primitives.sputnik-dao.near';
+
+await wallet.signAndSendTransaction({
+  receiverId: DAO_CONTRACT_ADDRESS,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'act_proposal',
+      args: { id: 0, action: 'VoteApprove' },
+      gas: '300000000000000',
+    }
+  }]
+});
+```
+
+```rust Rust Contract
+pub enum Action {
+  VoteApprove,
+  VoteReject,
+  VoteRemove,
+  Finalize,
+}
+
+#[ext_contract(ext_dao_contract)]
+trait ExternalDaoContract {
+  fn act_proposal(&mut self, id: u64, action: Action, memo: Option<String>) -> Promise;
+}
+
+#[near]
+impl Contract {
+  #[payable]
+  pub fn act_proposal(&mut self, id: u64, action: Action) -> Promise {
+    let promise = ext_dao_contract::ext(self.dao_contract.clone())
+      .with_static_gas(Gas(10 * TGAS))
+      .act_proposal(id, action, None);
+
+    promise.then(
+      Self::ext(env::current_account_id())
+        .external_common_callback()
+    )
+  }
+}
+```
+</CodeGroup>
+
+<Note>
+Available vote options: `VoteApprove`, `VoteReject`, `VoteRemove`.
+</Note>
+
+---
+
+## Additional Resources
+
+- [Sputnik DAO Contract](https://github.com/near-daos/sputnik-dao-contract)
+- [AstraDAO UI](https://near.social/astraplusplus.ndctools.near/widget/home?page=daos)
+- [NEAR Treasury](https://neartreasury.com/) - Treasury management web app

@@ -1,0 +1,671 @@
+---
+title: Integrate Smart Contracts
+sidebarTitle: Integrate Contracts
+description: Learn how to integrate NEAR smart contracts into your frontend application, including reading data, sending transactions, and handling data types.
+---
+
+Once you have [wallet login](/web3-apps/wallet-login) working in your application, the next step is to integrate smart contract functionality. This guide covers everything you need to know about calling contract methods from your frontend.
+
+---
+
+## Contract Interaction Basics
+
+There are two types of contract interactions:
+
+<CardGroup cols={2}>
+  <Card title="View Methods" icon="eye">
+    **Read-only operations** that query contract state. These are free and don't require user signatures.
+  </Card>
+  
+  <Card title="Call Methods" icon="paper-plane">
+    **State-changing operations** that modify contract data. These cost gas fees and require user signatures.
+  </Card>
+</CardGroup>
+
+### Comparison Table
+
+| Feature | View Methods | Call Methods |
+|---------|-------------|-------------|
+| **Cost** | Free | Gas fees (~0.0001 Ⓝ) |
+| **Speed** | Instant | 1-2 seconds |
+| **Signature Required** | No | Yes |
+| **Changes State** | No | Yes |
+| **Can Transfer Tokens** | No | Yes |
+
+---
+
+## Reading Contract Data (View Methods)
+
+View methods are used to query contract state without modifying it. They're perfect for displaying data like balances, ownership, or any read-only information.
+
+<Tabs>
+  <Tab title="React Hooks">
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+    import { useEffect, useState } from 'react';
+
+    function GreetingDisplay() {
+      const { viewFunction } = useNearWallet();
+      const [greeting, setGreeting] = useState('');
+      const [loading, setLoading] = useState(true);
+
+      useEffect(() => {
+        async function fetchGreeting() {
+          try {
+            const result = await viewFunction({
+              contractId: 'hello.near-examples.testnet',
+              method: 'get_greeting',
+              args: {} // No arguments needed for this method
+            });
+            setGreeting(result);
+          } catch (error) {
+            console.error('Error fetching greeting:', error);
+          } finally {
+            setLoading(false);
+          }
+        }
+
+        fetchGreeting();
+      }, [viewFunction]);
+
+      if (loading) return <p>Loading...</p>;
+      return <p>Current greeting: {greeting}</p>;
+    }
+    ```
+  </Tab>
+  
+  <Tab title="near-api-js">
+    ```tsx
+    import { JsonRpcProvider } from 'near-api-js';
+
+    async function getGreeting() {
+      const provider = new JsonRpcProvider({ 
+        url: 'https://test.rpc.fastnear.com' 
+      });
+
+      try {
+        const result = await provider.callFunction(
+          'hello.near-examples.testnet',
+          'get_greeting',
+          {} // Arguments
+        );
+        console.log('Greeting:', result);
+        return result;
+      } catch (error) {
+        console.error('Error:', error);
+      }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="Fetch API">
+    ```tsx
+    async function getGreeting() {
+      const response = await fetch('https://test.rpc.fastnear.com', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          jsonrpc: '2.0',
+          id: 'dontcare',
+          method: 'query',
+          params: {
+            request_type: 'call_function',
+            finality: 'final',
+            account_id: 'hello.near-examples.testnet',
+            method_name: 'get_greeting',
+            args_base64: btoa(JSON.stringify({})),
+          },
+        }),
+      });
+
+      const { result } = await response.json();
+      const greeting = JSON.parse(
+        Buffer.from(result.result).toString()
+      );
+      return greeting;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+  View methods can be called without a wallet connection, making them perfect for displaying public contract data to all visitors.
+</Tip>
+
+---
+
+## Modifying Contract State (Call Methods)
+
+Call methods modify contract state and require the user to sign a transaction. They cost gas fees (typically fractions of a cent) and take 1-2 seconds to complete.
+
+<Tabs>
+  <Tab title="React Hooks">
+    ```tsx
+    import { useNearWallet } from 'near-connect-hooks';
+    import { useState } from 'react';
+
+    function GreetingForm() {
+      const { callFunction, accountId } = useNearWallet();
+      const [newGreeting, setNewGreeting] = useState('');
+      const [loading, setLoading] = useState(false);
+
+      const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!accountId) {
+          alert('Please connect your wallet first');
+          return;
+        }
+
+        setLoading(true);
+        try {
+          await callFunction({
+            contractId: 'hello.near-examples.testnet',
+            method: 'set_greeting',
+            args: { greeting: newGreeting },
+            gas: '30000000000000', // 30 TGas
+            deposit: '0', // No deposit required
+          });
+          alert('Greeting updated successfully!');
+        } catch (error) {
+          console.error('Error updating greeting:', error);
+          alert('Failed to update greeting');
+        } finally {
+          setLoading(false);
+        }
+      };
+
+      return (
+        <form onSubmit={handleSubmit}>
+          <input
+            type="text"
+            value={newGreeting}
+            onChange={(e) => setNewGreeting(e.target.value)}
+            placeholder="Enter new greeting"
+          />
+          <button type="submit" disabled={loading}>
+            {loading ? 'Updating...' : 'Update Greeting'}
+          </button>
+        </form>
+      );
+    }
+    ```
+  </Tab>
+  
+  <Tab title="NEAR Connect">
+    ```tsx
+    import { NearConnector } from '@hot-labs/near-connect';
+
+    async function setGreeting(connector: NearConnector, greeting: string) {
+      try {
+        const wallet = await connector.wallet();
+        
+        const result = await wallet.signAndSendTransaction({
+          receiverId: 'hello.near-examples.testnet',
+          actions: [
+            {
+              type: 'FunctionCall',
+              params: {
+                methodName: 'set_greeting',
+                args: { greeting },
+                gas: '30000000000000', // 30 TGas
+                deposit: '0',
+              },
+            },
+          ],
+        });
+
+        console.log('Transaction hash:', result.transaction.hash);
+        return result;
+      } catch (error) {
+        console.error('Error updating greeting:', error);
+        throw error;
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Gas and Deposits
+
+Understanding gas and deposits is crucial for contract interactions:
+
+### Gas
+
+Gas is the computational fee for executing contract methods. It's measured in TGas (teragas).
+
+<CodeGroup>
+```tsx Gas Helper Functions
+const TGAS = 1_000_000_000_000; // 1 TGas = 10^12 gas units
+
+// Convert TGas to gas units
+function toGas(tgas: number): string {
+  return (tgas * TGAS).toString();
+}
+
+// Common gas amounts
+const GAS_AMOUNTS = {
+  simple: toGas(30),    // 30 TGas - simple operations
+  medium: toGas(100),   // 100 TGas - moderate complexity
+  complex: toGas(200),  // 200 TGas - complex operations
+  max: toGas(300),      // 300 TGas - maximum per transaction
+};
+```
+
+```tsx Usage Example
+import { useNearWallet } from 'near-connect-hooks';
+
+function MyComponent() {
+  const { callFunction } = useNearWallet();
+
+  const simpleCall = async () => {
+    await callFunction({
+      contractId: 'contract.near',
+      method: 'simple_method',
+      args: {},
+      gas: GAS_AMOUNTS.simple, // 30 TGas
+      deposit: '0',
+    });
+  };
+}
+```
+</CodeGroup>
+
+<Note>
+  If you don't specify gas, most libraries default to 30 TGas. Start with this and increase if transactions fail due to insufficient gas.
+</Note>
+
+### Deposits
+
+Deposits are NEAR tokens attached to a transaction. They're measured in yoctoNEAR (1 Ⓝ = 10^24 yoctoNEAR).
+
+<CodeGroup>
+```tsx Deposit Helper Functions
+import { NEAR } from '@near-js/tokens';
+
+// Convert NEAR to yoctoNEAR
+function toYocto(amount: string): string {
+  return NEAR.fromDecimal(amount);
+}
+
+// Convert yoctoNEAR to NEAR for display
+function fromYocto(yocto: string, decimals = 2): string {
+  return NEAR.fromUnits(yocto, decimals);
+}
+
+// Common deposit amounts
+const DEPOSITS = {
+  none: '0',
+  storage: toYocto('0.01'),     // 0.01 NEAR for storage
+  half: toYocto('0.5'),          // 0.5 NEAR
+  one: toYocto('1'),             // 1 NEAR
+  security: '1',                 // 1 yoctoNEAR for security
+};
+```
+
+```tsx Usage Example
+import { useNearWallet } from 'near-connect-hooks';
+
+function NFTMinter() {
+  const { callFunction } = useNearWallet();
+
+  const mintNFT = async () => {
+    await callFunction({
+      contractId: 'nft.near',
+      method: 'nft_mint',
+      args: {
+        token_id: 'unique-id',
+        receiver_id: 'alice.near',
+        metadata: {
+          title: 'My NFT',
+          description: 'An awesome NFT',
+        },
+      },
+      gas: '100000000000000',
+      deposit: DEPOSITS.storage, // 0.01 NEAR for storage
+    });
+  };
+}
+```
+</CodeGroup>
+
+<Warning>
+  Always send amounts as strings, never as numbers. JavaScript's Number type can't accurately represent large integers, leading to precision loss.
+</Warning>
+
+---
+
+## Handling Data Types
+
+Contract methods often work with special data types that need proper encoding/decoding:
+
+### Timestamps
+
+<CodeGroup>
+```tsx Converting Timestamps
+// NEAR uses nanoseconds (19 digits)
+// JavaScript Date.now() returns milliseconds (13 digits)
+
+function jsToNearTimestamp(jsTimestamp: number): string {
+  // Convert milliseconds to nanoseconds
+  return (jsTimestamp * 1_000_000).toString();
+}
+
+function nearToJsTimestamp(nearTimestamp: string): number {
+  // Convert nanoseconds to milliseconds
+  return Math.floor(parseInt(nearTimestamp) / 1_000_000);
+}
+
+// Usage
+const now = Date.now();
+const nearTime = jsToNearTimestamp(now);
+console.log('NEAR timestamp:', nearTime); // 19 digits
+
+const jsTime = nearToJsTimestamp(nearTime);
+const date = new Date(jsTime);
+console.log('JavaScript date:', date.toISOString());
+```
+
+```tsx Contract Call Example
+import { useNearWallet } from 'near-connect-hooks';
+
+function ScheduleEvent() {
+  const { callFunction } = useNearWallet();
+
+  const scheduleForTomorrow = async () => {
+    const tomorrow = Date.now() + 24 * 60 * 60 * 1000;
+    const nearTimestamp = jsToNearTimestamp(tomorrow);
+
+    await callFunction({
+      contractId: 'scheduler.near',
+      method: 'schedule_event',
+      args: {
+        event_time: nearTimestamp,
+        event_name: 'Tomorrow Event',
+      },
+      gas: '30000000000000',
+      deposit: '0',
+    });
+  };
+}
+```
+</CodeGroup>
+
+### Large Numbers (U128, U64)
+
+Contracts often use u64 or u128 for balances and IDs. JavaScript can't handle these natively, so they're represented as strings.
+
+```tsx
+// ❌ WRONG - Will lose precision
+const balance = 1000000000000000000000000; // Number
+
+// ✅ CORRECT - Use strings
+const balance = "1000000000000000000000000"; // String
+
+// Working with large numbers
+import { NEAR } from '@near-js/tokens';
+
+// Display balance to user
+function displayBalance(yoctoBalance: string) {
+  const near = NEAR.fromUnits(yoctoBalance, 2);
+  return `${near} NEAR`;
+}
+
+// Get balance from user input
+function parseUserInput(nearAmount: string) {
+  return NEAR.fromDecimal(nearAmount);
+}
+```
+
+### Account IDs
+
+```tsx
+// Account IDs are strings
+type AccountId = string;
+
+// Validation helper
+function isValidAccountId(accountId: string): boolean {
+  // NEAR account ID rules:
+  // - Lowercase letters, digits, - and _
+  // - 2-64 characters
+  // - Cannot start or end with separator
+  const pattern = /^(([a-z\d]+[-_])*[a-z\d]+\.)*([a-z\d]+[-_])*[a-z\d]+$/;
+  return pattern.test(accountId) && 
+         accountId.length >= 2 && 
+         accountId.length <= 64;
+}
+```
+
+---
+
+## Error Handling
+
+Proper error handling improves user experience and helps debug issues:
+
+```tsx
+import { useNearWallet } from 'near-connect-hooks';
+import { useState } from 'react';
+
+function RobustContractCall() {
+  const { callFunction, accountId } = useNearWallet();
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const handleContractCall = async () => {
+    // Reset error state
+    setError(null);
+
+    // Check wallet connection
+    if (!accountId) {
+      setError('Please connect your wallet first');
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      await callFunction({
+        contractId: 'hello.near-examples.testnet',
+        method: 'set_greeting',
+        args: { greeting: 'Hello!' },
+        gas: '30000000000000',
+        deposit: '0',
+      });
+    } catch (err: any) {
+      // Handle different error types
+      if (err.message?.includes('User rejected')) {
+        setError('Transaction was cancelled');
+      } else if (err.message?.includes('insufficient funds')) {
+        setError('Insufficient balance to pay gas fees');
+      } else if (err.message?.includes('Exceeded the prepaid gas')) {
+        setError('Transaction requires more gas. Please try again.');
+      } else {
+        setError(`Transaction failed: ${err.message || 'Unknown error'}`);
+      }
+      console.error('Contract call error:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div>
+      <button onClick={handleContractCall} disabled={loading}>
+        {loading ? 'Processing...' : 'Call Contract'}
+      </button>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+    </div>
+  );
+}
+```
+
+---
+
+## Batch Transactions
+
+Send multiple transactions in a single user approval:
+
+```tsx
+import { useNearWallet } from 'near-connect-hooks';
+
+function BatchTransactionExample() {
+  const { signAndSendTransactions } = useNearWallet();
+
+  const handleBatch = async () => {
+    try {
+      const results = await signAndSendTransactions({
+        transactions: [
+          {
+            receiverId: 'token.near',
+            actions: [
+              {
+                type: 'FunctionCall',
+                params: {
+                  methodName: 'ft_transfer',
+                  args: {
+                    receiver_id: 'alice.near',
+                    amount: '1000000',
+                  },
+                  gas: '30000000000000',
+                  deposit: '1',
+                },
+              },
+            ],
+          },
+          {
+            receiverId: 'another.near',
+            actions: [
+              {
+                type: 'FunctionCall',
+                params: {
+                  methodName: 'update_status',
+                  args: { status: 'completed' },
+                  gas: '30000000000000',
+                  deposit: '0',
+                },
+              },
+            ],
+          },
+        ],
+      });
+
+      console.log(`Completed ${results.length} transactions`);
+    } catch (error) {
+      console.error('Batch transaction failed:', error);
+    }
+  };
+
+  return <button onClick={handleBatch}>Send Batch</button>;
+}
+```
+
+---
+
+## Best Practices
+
+<AccordionGroup>
+  <Accordion title="Always validate inputs before sending transactions" icon="shield-check">
+    ```tsx
+    function validateAndCall(amount: string, recipient: string) {
+      // Validate amount
+      if (!amount || parseFloat(amount) <= 0) {
+        throw new Error('Invalid amount');
+      }
+
+      // Validate recipient
+      if (!isValidAccountId(recipient)) {
+        throw new Error('Invalid account ID');
+      }
+
+      // Proceed with transaction...
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Show loading states during transactions" icon="spinner">
+    Users should always know when a transaction is processing:
+    
+    ```tsx
+    const [txState, setTxState] = useState<'idle' | 'pending' | 'success' | 'error'>('idle');
+
+    // Show appropriate UI based on state
+    {txState === 'pending' && <Spinner />}
+    {txState === 'success' && <SuccessMessage />}
+    {txState === 'error' && <ErrorMessage />}
+    ```
+  </Accordion>
+
+  <Accordion title="Cache view method results when appropriate" icon="database">
+    ```tsx
+    import { useQuery } from '@tanstack/react-query';
+    import { useNearWallet } from 'near-connect-hooks';
+
+    function useGreeting() {
+      const { viewFunction } = useNearWallet();
+
+      return useQuery({
+        queryKey: ['greeting'],
+        queryFn: () => viewFunction({
+          contractId: 'hello.near-examples.testnet',
+          method: 'get_greeting',
+        }),
+        staleTime: 30000, // Cache for 30 seconds
+      });
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Handle transaction failures gracefully" icon="triangle-exclamation">
+    Always provide clear feedback when transactions fail and offer actionable next steps:
+    
+    ```tsx
+    catch (error) {
+      if (error.message.includes('insufficient funds')) {
+        showError('Not enough NEAR to pay gas fees. Please add funds to your wallet.');
+      } else {
+        showError('Transaction failed. Please try again or contact support.');
+      }
+    }
+    ```
+  </Accordion>
+
+  <Accordion title="Use TypeScript for type safety" icon="shield">
+    Define contract interfaces for better type safety:
+    
+    ```tsx
+    interface HelloContract {
+      get_greeting: () => Promise<string>;
+      set_greeting: (args: { greeting: string }) => Promise<void>;
+    }
+
+    // Use with typed calls
+    const greeting = await viewFunction<string>({
+      contractId: 'hello.near-examples.testnet',
+      method: 'get_greeting',
+    });
+    ```
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Backend Authentication" icon="server" href="/web3-apps/backend-login">
+    Learn how to authenticate users on your backend
+  </Card>
+  
+  <Card title="Build Smart Contracts" icon="file-contract" href="/smart-contracts/quickstart">
+    Create your own smart contracts
+  </Card>
+  
+  <Card title="Token Integration" icon="coins" href="/tokens/fungible-tokens/introduction">
+    Work with fungible and non-fungible tokens
+  </Card>
+  
+  <Card title="Advanced Patterns" icon="wand-sparkles" href="/web3-apps/advanced">
+    Explore advanced integration patterns
+  </Card>
+</CardGroup>

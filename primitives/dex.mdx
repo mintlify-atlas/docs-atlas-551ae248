@@ -1,0 +1,309 @@
+---
+title: Decentralized Exchanges
+description: Learn how to interact with decentralized exchanges on NEAR Protocol, including token swapping, liquidity pools, and integration with Ref Finance DEX.
+---
+
+A Decentralized Exchange (DEX) is an application that allows users to trade tokens (native and fungible tokens) through smart contracts.
+
+<img src="/images/primitives/dex-diagram.png" alt="DEX Architecture" />
+
+DEXs work by having [pools of token pairs](https://guide.rhea.finance/products/overview/pooling) (e.g., NEAR-USDC) that users can deposit tokens into. The ratio of tokens in the pool determines the exchange rate for a swap. Swapping means adding tokens to one side of the pool while removing tokens from the other side.
+
+<Note>
+This documentation refers to [Ref Finance](https://www.ref.finance/), a community-built DEX on NEAR. Check their [official docs](https://guide.rhea.finance/) for more information.
+</Note>
+
+---
+
+## Query Token Exchange Rate
+
+You can query the exchange rate of a token by calling the Ref Finance indexer:
+
+```javascript
+const tokenContract = 'token.v2.ref-finance.near';
+const tokenPriceResult = await fetch(
+  `https://indexer.ref.finance/get-token-price?token_id=${tokenContract}`,
+);
+const tokenPriceValue = await tokenPriceResult.json();
+
+console.log(tokenPriceValue);
+// {
+//   "token_contract_id": "token.v2.ref-finance.near",
+//   "price": "0.08153090"
+// }
+```
+
+<Tip>
+Ref Finance has a method to [get all token prices at once](https://indexer.ref.finance/list-token-price).
+</Tip>
+
+---
+
+## Query Whitelisted Tokens
+
+Anyone can list tokens for sale in the DEX. To protect users, the DEX contract maintains a list of whitelisted tokens:
+
+<CodeGroup>
+```bash CLI
+near view v2.ref-finance.near get_whitelisted_tokens
+```
+</CodeGroup>
+
+Example response:
+```javascript
+[
+  'wrap.near',
+  'usdt.tether-token.near',
+  'token.v2.ref-finance.near',
+  'token.paras.near',
+  'meta-pool.near',
+  ...
+]
+```
+
+---
+
+## Register in the DEX
+
+Before using the DEX, you must register your account by paying for storage:
+
+<CodeGroup>
+```bash CLI
+near call v2.ref-finance.near storage_deposit '' --accountId <account> --amount 0.1
+```
+
+```javascript JavaScript
+await wallet.signAndSendTransaction({
+  receiverId: 'v2.ref-finance.near',
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'storage_deposit',
+      args: {},
+      gas: '30000000000000',
+      deposit: '100000000000000000000000',
+    }
+  }]
+});
+```
+</CodeGroup>
+
+---
+
+## Deposit Funds
+
+To swap tokens, you must first deposit tokens into the DEX. Transfer the FT you want to swap to the DEX contract:
+
+<CodeGroup>
+```bash CLI
+near call token.v2.ref-finance.near ft_transfer_call '{
+  "receiver_id": "v2.ref-finance.near",
+  "amount": "1000000000000",
+  "msg": ""
+}' --gas 300000000000000 --deposit 0.000000000000000000000001 --accountId <account>
+```
+
+```javascript JavaScript
+await wallet.signAndSendTransaction({
+  receiverId: 'token.v2.ref-finance.near',
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'ft_transfer_call',
+      args: {
+        receiver_id: 'v2.ref-finance.near',
+        amount: '1000000000000',
+        msg: '',
+      },
+      gas: '300000000000000',
+      deposit: '1',
+    }
+  }]
+});
+```
+</CodeGroup>
+
+<Warning>
+Do **NOT** transfer **NEAR** tokens to Ref Finance. Instead, call `near_deposit` in the [`wrap.near`](https://nearblocks.io/address/wrap.near) contract, attaching the amount of NEAR you want to swap. This will mint `wrap.near` for you, which you can then transfer to Ref Finance.
+</Warning>
+
+---
+
+## Get Deposit Balances
+
+Query your deposit balances by calling `get_deposits`:
+
+<CodeGroup>
+```bash CLI
+near view v2.ref-finance.near get_deposits '{"account_id": "bob.near"}'
+```
+
+```javascript JavaScript
+const AMM_CONTRACT_ADDRESS = 'v2.ref-finance.near';
+
+const deposits = await wallet.viewMethod({
+  contractId: AMM_CONTRACT_ADDRESS,
+  method: 'get_deposits',
+  args: {
+    account_id: 'bob.near',
+  },
+});
+
+console.log(deposits);
+// {
+//   "token.v2.ref-finance.near": "0",
+//   "wrap.near": "0"
+// }
+```
+</CodeGroup>
+
+---
+
+## Query Pools
+
+DEXs work by having multiple pools of token pairs. You can query available pools:
+
+<CodeGroup>
+```bash CLI
+near view v2.ref-finance.near get_pools '{"from_index": 0, "limit": 1000}'
+```
+
+```javascript JavaScript
+const AMM_CONTRACT_ADDRESS = 'v2.ref-finance.near';
+
+const pools = await wallet.viewMethod({
+  contractId: AMM_CONTRACT_ADDRESS,
+  method: 'get_pools',
+  args: {
+    from_index: 0,
+    limit: 1000,
+  },
+});
+
+console.log(pools);
+```
+</CodeGroup>
+
+Example response:
+```javascript
+[
+  {
+    pool_kind: 'SIMPLE_POOL',
+    token_account_ids: ['token.skyward.near', 'wrap.near'],
+    amounts: ['51865812079751349630100', '6254162663147994789053210138'],
+    total_fee: 30,
+    shares_total_supply: '1305338644973934698612124055',
+    amp: 0,
+  },
+  ...
+]
+```
+
+---
+
+## Swap Tokens
+
+To swap tokens, you need to have funds deposited and there must exist a pool with both tokens:
+
+<CodeGroup>
+```bash CLI
+near call v2.ref-finance.near swap '{
+  "actions": [{
+    "pool_id": 79,
+    "token_in": "token.v2.ref-finance.near",
+    "amount_in": "100000000000000000",
+    "token_out": "wrap.near",
+    "min_amount_out": "1"
+  }]
+}' --gas 300000000000000 --deposit 0.000000000000000000000001 --accountId bob.near
+```
+
+```javascript JavaScript
+const AMM_CONTRACT_ADDRESS = 'v2.ref-finance.near';
+
+await wallet.signAndSendTransaction({
+  receiverId: AMM_CONTRACT_ADDRESS,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'swap',
+      args: {
+        actions: [
+          {
+            pool_id: 79,
+            token_in: 'token.v2.ref-finance.near',
+            token_out: 'wrap.near',
+            amount_in: '100000000000000000',
+            min_amount_out: '1',
+          },
+        ],
+      },
+      gas: '300000000000000',
+      deposit: '1',
+    }
+  }]
+});
+```
+
+```rust Rust Contract
+#[near(serializers = [json])]
+pub struct SwapAction {
+  pub pool_id: u64,
+  pub token_in: AccountId,
+  pub amount_in: Option<U128>,
+  pub token_out: AccountId,
+  pub min_amount_out: U128,
+}
+
+#[ext_contract(ext_amm_contract)]
+trait ExternalAmmContract {
+  fn swap(&self, actions: Vec<SwapAction>) -> Promise;
+}
+
+#[near]
+impl Contract {
+  #[payable]
+  pub fn swap_tokens(
+    &mut self,
+    pool_id: u64,
+    token_in: AccountId,
+    token_out: AccountId,
+    amount_in: U128,
+    min_amount_out: U128
+  ) -> Promise {
+    assert_eq!(
+      env::attached_deposit(),
+      1,
+      "Requires attached deposit of exactly 1 yoctoNEAR"
+    );
+
+    let swap_action = SwapAction {
+      pool_id,
+      token_in,
+      token_out,
+      amount_in: Some(amount_in),
+      min_amount_out,
+    };
+
+    let promise = ext_amm_contract::ext(self.amm_contract.clone())
+      .with_static_gas(Gas(150 * TGAS))
+      .with_attached_deposit(1)
+      .swap(vec![swap_action]);
+
+    promise.then(
+      Self::ext(env::current_account_id())
+        .with_static_gas(Gas(100 * TGAS))
+        .external_call_callback()
+    )
+  }
+}
+```
+</CodeGroup>
+
+---
+
+## Additional Resources
+
+- [Ref Finance](https://www.ref.finance/)
+- [Ref Finance Documentation](https://guide.rhea.finance/)
+- [Rhea Finance](https://app.rhea.finance/)

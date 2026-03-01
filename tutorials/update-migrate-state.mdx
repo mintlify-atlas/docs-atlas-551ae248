@@ -1,0 +1,419 @@
+---
+title: Update contracts and migrate state
+description: Learn how to safely upgrade smart contracts and migrate state data
+---
+
+NEAR allows you to update deployed smart contracts while preserving their state. This enables you to fix bugs, add features, and improve contracts after deployment.
+
+<Warning>
+Contract updates are powerful but require careful planning. Improper updates can corrupt state or break functionality.
+</Warning>
+
+## Overview
+
+Updating a contract involves:
+1. Deploying new contract code to an existing account
+2. Migrating state if the data structure changed
+3. Testing thoroughly before and after
+
+<CardGroup cols={1}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/near-examples/update-migrate-rust">
+    View the complete contract update example
+  </Card>
+</CardGroup>
+
+## Simple update (no state changes)
+
+If your contract structure doesn't change, updating is straightforward:
+
+<Steps>
+  <Step title="Build the new contract">
+    <CodeGroup>
+    ```bash Rust
+    cargo near build
+    ```
+    
+    ```bash JavaScript
+    npm run build
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Deploy the update">
+    ```bash
+    near contract deploy <contract-account>.testnet \
+      use-file ./target/near/contract.wasm \
+      without-init-call \
+      network-config testnet
+    ```
+    
+    <Info>
+    Using `without-init-call` preserves existing state. The new code can access all previously stored data.
+    </Info>
+  </Step>
+  
+  <Step title="Verify the update">
+    Test that existing functionality still works and new features are available:
+    
+    ```bash
+    # Test existing function
+    near contract call-function as-transaction <contract>.testnet \
+      existing_method json-args '{}' \
+      prepaid-gas '30 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    
+    # Test new function
+    near contract call-function as-transaction <contract>.testnet \
+      new_method json-args '{}' \
+      prepaid-gas '30 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    ```
+  </Step>
+</Steps>
+
+## Update with state migration
+
+When your contract structure changes, you need to migrate state:
+
+### Example scenario
+
+<Tabs>
+  <Tab title="Old Contract">
+    ```rust
+    #[near(contract_state)]
+    pub struct OldContract {
+        owner: AccountId,
+        counter: u64,
+    }
+    ```
+  </Tab>
+  
+  <Tab title="New Contract">
+    ```rust
+    #[near(contract_state)]
+    pub struct NewContract {
+        owner: AccountId,
+        counter: u128,  // Changed from u64
+        created_at: u64,  // New field
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Migration method
+
+Implement a migration function:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env};
+    
+    #[near(contract_state)]
+    pub struct OldContract {
+        owner: AccountId,
+        counter: u64,
+    }
+    
+    #[near(contract_state)]
+    pub struct NewContract {
+        owner: AccountId,
+        counter: u128,
+        created_at: u64,
+    }
+    
+    #[near]
+    impl NewContract {
+        #[init(ignore_state)]
+        #[private]
+        pub fn migrate() -> Self {
+            // Read old state
+            let old: OldContract = env::state_read()
+                .expect("Failed to read old state");
+            
+            // Return new state with migrated data
+            Self {
+                owner: old.owner,
+                counter: old.counter as u128,
+                created_at: env::block_timestamp(),
+            }
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, near, initialize } from 'near-sdk-js';
+    
+    @NearBindgen({ requireInit: false })
+    class NewContract {
+      owner: string;
+      counter: bigint;
+      created_at: bigint;
+      
+      @initialize({ privateFunction: true })
+      migrate() {
+        // Read old state
+        const state = JSON.parse(near.storageRead("STATE"));
+        
+        // Migrate data
+        this.owner = state.owner;
+        this.counter = BigInt(state.counter);
+        this.created_at = near.blockTimestamp();
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Executing migration
+
+<Steps>
+  <Step title="Deploy the new contract code">
+    ```bash
+    near contract deploy <contract>.testnet \
+      use-file ./target/near/contract.wasm \
+      without-init-call \
+      network-config testnet
+    ```
+  </Step>
+  
+  <Step title="Call the migration method">
+    ```bash
+    near contract call-function as-transaction <contract>.testnet \
+      migrate json-args '{}' \
+      prepaid-gas '300 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    ```
+    
+    <Warning>
+    Mark migration methods as `#[private]` so only the contract account can call them.
+    </Warning>
+  </Step>
+  
+  <Step title="Verify the migration">
+    Check that state was migrated correctly:
+    
+    ```bash
+    near contract call-function as-read-only <contract>.testnet \
+      get_counter json-args '{}' \
+      network-config testnet
+    ```
+  </Step>
+</Steps>
+
+## Migration patterns
+
+<AccordionGroup>
+  <Accordion title="Adding new fields">
+    Use `Option<T>` for new fields or provide defaults:
+    
+    ```rust
+    #[near(contract_state)]
+    pub struct Contract {
+        owner: AccountId,
+        new_field: Option<String>,  // Can be None for old state
+    }
+    
+    impl Default for Contract {
+        fn default() -> Self {
+            Self {
+                owner: env::current_account_id(),
+                new_field: None,
+            }
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Removing fields">
+    Simply don't include removed fields in the new struct. Old data is ignored:
+    
+    ```rust
+    // Old contract had 'deprecated_field', new one doesn't
+    #[near(contract_state)]
+    pub struct NewContract {
+        owner: AccountId,
+        // deprecated_field removed
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Changing field types">
+    Read old state, convert types, write new state:
+    
+    ```rust
+    #[init(ignore_state)]
+    #[private]
+    pub fn migrate() -> Self {
+        #[near(serializers = [borsh])]
+        struct OldContract {
+            counter: u64,
+        }
+        
+        let old: OldContract = env::state_read().unwrap();
+        
+        Self {
+            counter: old.counter as u128,
+        }
+    }
+    ```
+  </Accordion>
+  
+  <Accordion title="Complex migrations">
+    For complex changes, implement multi-step migrations:
+    
+    ```rust
+    #[near]
+    impl Contract {
+        #[private]
+        pub fn migrate_step_1(&mut self) {
+            // First migration step
+        }
+        
+        #[private]
+        pub fn migrate_step_2(&mut self) {
+            // Second migration step
+        }
+    }
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Best practices
+
+<CardGroup cols={2}>
+  <Card title="Test thoroughly" icon="flask">
+    Always test migrations on testnet with production-like data before updating mainnet
+  </Card>
+  
+  <Card title="Version your contracts" icon="code-branch">
+    Track contract versions in state to enable conditional migrations
+  </Card>
+  
+  <Card title="Make migrations private" icon="lock">
+    Only the contract should be able to trigger migrations
+  </Card>
+  
+  <Card title="Plan for rollback" icon="rotate-left">
+    Keep old contract code available in case you need to redeploy it
+  </Card>
+</CardGroup>
+
+## Testing migrations
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+        use near_sdk::test_utils::VMContextBuilder;
+        use near_sdk::testing_env;
+        
+        #[test]
+        fn test_migration() {
+            let context = VMContextBuilder::new().build();
+            testing_env!(context);
+            
+            // Create old contract state
+            let old = OldContract {
+                owner: "alice.near".parse().unwrap(),
+                counter: 42,
+            };
+            env::state_write(&old);
+            
+            // Perform migration
+            let new = NewContract::migrate();
+            
+            // Verify migration
+            assert_eq!(new.owner, old.owner);
+            assert_eq!(new.counter, 42u128);
+            assert!(new.created_at > 0);
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="JavaScript">
+    ```javascript
+    import { Worker } from 'near-workspaces';
+    
+    test('migration preserves data', async () => {
+      const worker = await Worker.init();
+      const root = worker.rootAccount;
+      
+      // Deploy old contract
+      const contract = await root.devDeploy('old_contract.wasm');
+      await contract.call('init', { owner: root.accountId });
+      await contract.call('increment', {});
+      
+      // Get old counter value
+      const oldCounter = await contract.view('get_counter', {});
+      
+      // Deploy new contract
+      await contract.deploy('new_contract.wasm');
+      
+      // Run migration
+      await contract.call('migrate', {});
+      
+      // Verify data preserved
+      const newCounter = await contract.view('get_counter', {});
+      expect(newCounter).toBe(oldCounter);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+## Versioning contracts
+
+Track versions to enable smart migrations:
+
+```rust
+#[near(contract_state)]
+pub struct Contract {
+    version: u32,
+    // other fields...
+}
+
+#[near]
+impl Contract {
+    #[init(ignore_state)]
+    #[private]
+    pub fn migrate() -> Self {
+        let version: u32 = env::storage_read(b"version")
+            .and_then(|v| v.try_into().ok())
+            .unwrap_or(0);
+        
+        match version {
+            0 => Self::migrate_v0_to_v1(),
+            1 => Self::migrate_v1_to_v2(),
+            _ => env::panic_str("Unknown version"),
+        }
+    }
+}
+```
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Contract security" icon="shield" href="/smart-contracts/security">
+    Secure your contract updates
+  </Card>
+  
+  <Card title="Testing guide" icon="flask" href="/smart-contracts/testing">
+    Comprehensive testing strategies
+  </Card>
+  
+  <Card title="Lock contracts" icon="lock" href="/smart-contracts/deploy">
+    Make contracts immutable when ready
+  </Card>
+  
+  <Card title="Factory pattern" icon="industry" href="/tutorials/factory-contracts">
+    Deploy versioned contracts with factories
+  </Card>
+</CardGroup>

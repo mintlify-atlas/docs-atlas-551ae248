@@ -1,0 +1,174 @@
+---
+title: 'Chain Signatures'
+description: 'Enable NEAR accounts to sign and execute transactions across multiple blockchains using Multi-Party Computation'
+keywords: ['chain signatures', 'MPC', 'multi-party computation', 'cross-chain', 'Bitcoin', 'Ethereum', 'Solana']
+---
+
+Chain Signatures enable NEAR accounts, including smart contracts, to sign and execute transactions across many blockchain protocols.
+
+This unlocks the next level of blockchain interoperability by giving ownership of diverse assets, cross-chain accounts, and data to every single NEAR account.
+
+![Chain Signatures Overview](/assets/docs/welcome-pages/chain-signatures-overview.png)
+
+<Accordion title="Supported Networks">
+  While you can sign transactions for any network using EdDSA or ECDSA keys, each chain signs transactions differently.
+
+  Our example implementations show you how to sign transactions for:
+  - Bitcoin
+  - Ethereum and all EVM chains (Base, BNB Chain, Avalanche, Polygon, Arbitrum, and more)
+  - Solana
+  - Cosmos chains
+  - XRP Ledger
+  - Aptos
+  - Sui
+</Accordion>
+
+## Benefits
+
+Integration with Chain Signatures brings many benefits to Web3 developers:
+
+<CardGroup cols={3}>
+  <Card title="Single Account" icon="user">
+    Manage interactions with external blockchains from one NEAR account, simplifying key management and reducing the need for multiple wallets.
+  </Card>
+  <Card title="Reduced Overhead" icon="code">
+    Write smart contracts on NEAR that directly sign cross-chain transactions, cutting down on code redundancy and potential points of failure.
+  </Card>
+  <Card title="Secure Signing" icon="shield">
+    Decentralized MPC signing process means no single entity controls the signing key, reducing centralization risks.
+  </Card>
+</CardGroup>
+
+<Tip>
+  Keep in mind that Chain Signatures is a "one way" solution to sign and execute outbound transactions happening on other blockchains. If you're looking to access states on external blockchains, check out [Omnibridge](/chain-abstraction/omnibridge).
+</Tip>
+
+## Use Cases
+
+The Chain Signatures architecture provides a decentralized method to interact with multiple blockchains from one NEAR account.
+
+### Bitcoin DeFi
+
+Developers can build decentralized finance (DeFi) applications on NEAR while directly leveraging Bitcoin liquidity. The business logic resides on NEAR, while BTC is used for actual payments.
+
+<AccordionGroup>
+  <Accordion title="Example Applications">
+    - **Atomic Swaps**: Facilitate trustless, instant exchanges between Bitcoin and other cryptocurrencies
+    - **Payment Processing**: Receive Bitcoin payments with native transfers to Chain Signature derived accounts
+    - **Lending Platforms**: Use smart contracts on NEAR for interest calculations, borrowing, and repayments
+    - **DeFi Protocols**: Control payment flow and execute Bitcoin transactions through NEAR contracts
+  </Accordion>
+</AccordionGroup>
+
+### Cross-Chain NFT Platforms
+
+Create NFT marketplaces on NEAR where users purchase NFTs using external cryptocurrencies:
+
+- Process BTC/ETH payments via Chain Signatures and Omnibridge
+- Handle NFT minting and trading logic on NEAR
+- Mint NFTs on multiple blockchains using Chain Signatures
+
+## How It Works
+
+Controlling accounts and their assets on other blockchain platforms is made possible through the interaction between three elements:
+
+<Steps>
+  <Step title="Derivation Paths">
+    A deterministic way to derive foreign addresses from one NEAR account. Each path creates a unique address that only your NEAR account can control.
+  </Step>
+  <Step title="Multichain Smart Contract">
+    The [v1.signer](https://nearblocks.io/address/v1.signer) contract receives requests to sign transactions for other blockchains.
+  </Step>
+  <Step title="MPC Service">
+    A decentralized third-party service providing signatures to the contract through threshold cryptography.
+  </Step>
+</Steps>
+
+![Chain Signatures Flow](/assets/docs/chain-abstraction/chain-abstract-2.svg)
+
+### Derivation Paths: One Account, Multiple Chains
+
+Chain Signatures link NEAR accounts to addresses in other blockchains using [Additive Key Derivation](https://eprint.iacr.org/2021/1330). These keys are generated using derivation paths.
+
+A derivation path is simply a string (e.g., `ethereum-1`, `ethereum-2`) that in conjunction with the NEAR account derives a unique address on the target blockchain.
+
+<CodeGroup>
+
+```text Example Derivations
+example.near + ethereum-1 = 0x1b48b83a308ea4beb845db088180dc3389f8aa3b
+example.near + ethereum-2 = 0x99c5d3025dc736541f2d97c3ef3c90de4d221315
+example.near + bitcoin-1  = bc1q...
+```
+
+</CodeGroup>
+
+<Info>
+  In practice, the external address is deterministically derived using the NEAR address (`example.near`), the path (`ethereum-1`), and the MPC service's public key.
+</Info>
+
+### Multichain Smart Contract
+
+The [v1.signer](https://nearblocks.io/address/v1.signer) contract has a `sign` method that takes three parameters:
+
+<ParamField path="payload" type="string" required>
+  The transaction or transaction hash to be signed for the target blockchain
+</ParamField>
+
+<ParamField path="path" type="string" required>
+  The derivation path that identifies the account to be used to sign the transaction
+</ParamField>
+
+<ParamField path="domain_id" type="integer" required>
+  Identifies the signature scheme: `0` for Secp256k1 (Bitcoin, Ethereum) or `1` for Ed25519 (Solana, Aptos)
+</ParamField>
+
+**Example:** A user could request a signature to `send 0.1 ETH to 0x060f1...` using the `ethereum-1` account with `0` (Secp256k1) as domain ID.
+
+After a request is made, the `sign` method yields execution while the MPC signing service signs the transaction. Once ready, the contract resumes and returns the signature.
+
+<Tip>
+  The `sign` method supports both Secp256k1 and Ed25519 signature schemes, enabling signing for the vast majority of well-known blockchains. MPC participants can add more signature schemes via the `vote_add_domains` method.
+</Tip>
+
+### Multi-Party Computation Service
+
+The essence of Multi-Party Computation (MPC) is to enable independent parties to perform shared computations on private information without revealing secrets to each other.
+
+NEAR's MPC service is comprised of several independent nodes, **none of which can sign by itself**, but instead create **signature-shares** that are **aggregated through multiple rounds** to **jointly** sign a transaction.
+
+Currently, the service is composed of 8 independent nodes. The set of participating nodes can be extended with the `vote_new_parameters` method if enough active nodes vote for it.
+
+<Steps>
+  <Step title="Listen for Requests">
+    The MPC service continuously listens for signature requests (calls to the `sign` method on `v1.signer`).
+  </Step>
+  <Step title="Joint Signing">
+    When detected, nodes jointly derive a signature for the payload using the account identified by the path.
+  </Step>
+  <Step title="Store Signature">
+    Once complete, the service calls the `v1.signer` contract to store the resulting signature.
+  </Step>
+</Steps>
+
+<Info>
+  **A Custom MPC Service**: Generally, MPC signing services work by sharing a master key, which needs to be re-created each time a node joins or leaves. NEAR's MPC service allows for nodes to safely join and leave without needing to re-derive a master key.
+</Info>
+
+## Concluding Remarks
+
+Chain Signatures are a powerful tool that allows NEAR accounts to control accounts on other blockchains. This is a fundamental step towards enabling true ownership of cross-chain data and assets.
+
+For the user, the process is made completely **on-chain**, since they only need to make a call to a smart contract and wait for the response.
+
+Thanks to derivation paths, a single NEAR account can control **multiple accounts** on different blockchains, and thanks to the MPC service, the user can be sure that **nobody but themselves** can request signatures for those accounts.
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Getting Started Guide" icon="rocket" href="/chain-abstraction/chain-signatures/getting-started">
+    Learn how to implement Chain Signatures in your application
+  </Card>
+  <Card title="Implementation Examples" icon="code" href="/chain-abstraction/chain-signatures/implementation">
+    View code examples for different blockchains
+  </Card>
+</CardGroup>

@@ -1,0 +1,486 @@
+---
+title: 'Meta Transactions'
+description: 'Enable users to execute transactions without owning gas tokens using relayers to cover transaction fees'
+keywords: ['meta transactions', 'relayer', 'gasless', 'NEP-366', 'signed delegate', 'transaction delegation']
+---
+
+[NEP-366](https://github.com/near/NEPs/pull/366) introduced the concept of meta transactions to NEAR Protocol. This feature allows users to execute transactions on NEAR without owning any gas or tokens. Users construct and sign transactions off-chain, and a third party (the relayer) covers the fees of submitting and executing the transaction.
+
+## Overview
+
+The graphic below shows an example use case for meta transactions. Alice owns an amount of the fungible token `$FT` and wants to transfer some to John by calling `ft_transfer("john", 10)` on an account named `FT`.
+
+The problem is, Alice has no NEAR tokens. She only has a NEAR account that someone else funded for her and she owns the private keys.
+
+![Flow chart of meta transactions](https://raw.githubusercontent.com/near/NEPs/003e589e6aba24fc70dd91c9cf7ef0007ca50735/neps/assets/nep-0366/NEP-DelegateAction.png)
+
+With meta transactions, Alice can create a `DelegateAction`, which is similar to a transaction. She signs the `DelegateAction` and forwards it (off-chain) to a relayer. The relayer wraps it in a transaction, of which the relayer is the signer and therefore pays the gas costs.
+
+<Info>
+  If the inner actions have an attached token balance, this is also paid for by the relayer.
+</Info>
+
+On chain, the `SignedDelegateAction` is converted to an action receipt and forwarded to Alice's account, which verifies the signature and valid nonce. If all checks pass, a new action receipt with the inner actions is sent to `FT`, where the `ft_transfer` call finally executes.
+
+## Why Use a Relayer?
+
+There are multiple reasons to use a relayer:
+
+<CardGroup cols={2}>
+  <Card title="New Users" icon="user-plus">
+    Your users are new to NEAR and don't have any gas to cover transactions.
+  </Card>
+  <Card title="FT Payment" icon="coins">
+    Users have only a Fungible Token balance and can use the FT to pay for gas.
+  </Card>
+  <Card title="Seamless Onboarding" icon="door-open">
+    Enterprises can onboard existing users onto NEAR without them worrying about gas costs and seed phrases.
+  </Card>
+  <Card title="Transaction Queue" icon="list">
+    The relayer acts as a queue for low urgency transactions during high network activity.
+  </Card>
+  <Card title="Asset Control" icon="shield">
+    Limit where users spend assets while allowing them custody and ownership.
+  </Card>
+  <Card title="Capital Efficiency" icon="chart-line">
+    Use a global pool of capital instead of allocating gas to each user individually.
+  </Card>
+</CardGroup>
+
+### Capital Efficiency Example
+
+<Accordion title="Understanding Capital Efficiency">
+  Without a relayer, if your business has 1M users, they would need to be allocated 0.25 NEAR each to cover gas costs, totalling 250k NEAR. However, only ~10% of users would actually use the full allowance, leaving a large amount unused.
+
+  Using a relayer, you can allocate 50k NEAR as a global pool of capital for your users, which can be refilled on an as-needed basis.
+</Accordion>
+
+## Relayer Architecture
+
+A basic relayer consists of a web server housing a funded NEAR account. This account receives an encoded signed transaction, which can be decoded into a `SignedDelegate` format and transmitted on-chain.
+
+![Relayer Overview](/assets/docs/welcome-pages/relayer-overview-technical.png)
+
+The client generates a `SignedDelegateAction` (a signed message that hasn't yet been sent), encodes it, and transmits it to this server, where it will be relayed onto the blockchain.
+
+## Building a Relayer
+
+<Steps>
+  <Step title="Set Up the Server">
+    Create a web server with a funded NEAR account that will pay for gas fees.
+  </Step>
+  <Step title="Implement Endpoints">
+    Add endpoints to receive encoded `SignedDelegateAction` transactions from clients.
+  </Step>
+  <Step title="Deserialize and Send">
+    Deserialize the signed transaction and send it to the NEAR network using your relayer account.
+  </Step>
+  <Step title="Optional: Gate Access">
+    Implement constraints to control who can use the relayer and for what purposes.
+  </Step>
+</Steps>
+
+<Tip>
+  If you're already acquainted with the technology and want to run your own Relayer, check out the complete [Rust Relayer server](#rust-relayer-server) open-source implementation.
+</Tip>
+
+### Relayer Server Example
+
+<Tabs>
+  <Tab title="near-api-js">
+    Here's a simple Express endpoint that deserializes the body, instantiates the relayer account, and sends the transaction:
+
+    ```typescript server.ts
+    app.post('/relay', async (req, res) => {
+      const serializedTx: Buffer = req.body;
+      const deserializedTx = deserialize(
+        SCHEMA.SignedDelegate,
+        Buffer.from(serializedTx)
+      ) as SignedDelegate;
+      
+      const relayerAccount = await getAccount(
+        NETWORK_ID,
+        RELAYER_ID,
+        RELAYER_PRIVATE_KEY
+      );
+      
+      const receipt = await relayerAccount.signAndSendTransaction({
+        actions: [actionCreators.signedDelegate(deserializedTx)],
+        receiverId: deserializedTx.delegateAction.senderId
+      });
+      
+      res.json(receipt);
+    });
+    ```
+
+    <Info>
+      Requires `near-api-js` >= 3.0.4, `@near-js/transactions` >= 1.1.2, and `@near-js/accounts` >= 1.0.4
+    </Info>
+  </Tab>
+  
+  <Tab title="@near-relay/server">
+    `@near-relay` simplifies meta transactions for beginners:
+
+    ```typescript server.ts
+    import { relay } from '@near-relay/server';
+
+    app.post('/relay', async (req, res) => {
+      const result = await relay(req.body);
+      res.json(result);
+    });
+    ```
+
+    For relaying account creation:
+
+    ```typescript
+    app.post('/create-account', async (req, res) => {
+      const { accountId, publicKey } = req.body;
+      const result = await createAccount(accountId, publicKey);
+      res.json(result);
+    });
+    ```
+  </Tab>
+</Tabs>
+
+### Client Implementation
+
+<Tabs>
+  <Tab title="near-api-js">
+    Create an arbitrary smart contract call, sign but don't send the transaction, then forward to the relayer:
+
+    ```typescript client.ts
+    const action = actionCreators.functionCall(
+      'method_name',
+      args,
+      gas,
+      deposit
+    );
+
+    const delegateAction = createAction({
+      senderId: account.accountId,
+      receiverId: 'contract.near',
+      actions: [action],
+      nonce: await account.connection.provider.query({
+        request_type: 'view_access_key',
+        account_id: account.accountId,
+        public_key: account.connection.signer.publicKey,
+        finality: 'final'
+      }).nonce + 1,
+      maxBlockHeight: (await account.connection.provider.block({ finality: 'final' })).header.height + 1000,
+      publicKey: account.connection.signer.publicKey
+    });
+
+    const signedDelegate = await account.signMessage(delegateAction);
+    const serialized = serialize(SCHEMA.SignedDelegate, signedDelegate);
+    
+    await fetch('http://relayer-url/relay', {
+      method: 'POST',
+      body: serialized
+    });
+    ```
+  </Tab>
+  
+  <Tab title="@near-relay/client">
+    Create an account with the relayer:
+
+    ```typescript
+    import { createAccountWithRelayer } from '@near-relay/client';
+
+    await createAccountWithRelayer(
+      'http://relayer-url/create-account',
+      'new-account.near'
+    );
+    ```
+
+    Send a transaction through the relayer:
+
+    ```typescript
+    import { relayTransaction } from '@near-relay/client';
+
+    const action = {
+      type: 'FunctionCall',
+      params: {
+        methodName: 'method_name',
+        args: {},
+        gas: '30000000000000',
+        deposit: '0'
+      }
+    };
+
+    await relayTransaction(
+      'http://relayer-url/relay',
+      'contract.near',
+      [action]
+    );
+    ```
+  </Tab>
+</Tabs>
+
+<Warning>
+  At the moment, wallet selector standard doesn't support signing transactions without immediately sending them. This functionality is essential for routing transactions to a relayer. Progress is being made to make this possible in the future.
+</Warning>
+
+## Advanced Topics
+
+### High Volume Parallel Processing
+
+When running a relayer that handles a large number of transactions, you will quickly run into a nonce collision problem.
+
+<Accordion title="Understanding Nonce Collisions">
+  At the protocol level, transactions have a unique number (nonce) that helps mitigate replay attacks. Each key on an account has its own nonce, expected to increase with each signature.
+
+  When multiple transactions are sent from the same access key simultaneously, their nonces might collide. If transactions are processed out of order, some will fail.
+
+  **Solution**: Sign each transaction with a different key. Adding multiple full access keys to the NEAR account used for relaying (up to 20 keys) can make a significant difference.
+
+  ```javascript
+  const keyPair = nearAPI.KeyPair.fromRandom("ed25519");
+  const receipt = await account.addKey(keyPair.getPublicKey().toString());
+  ```
+</Accordion>
+
+### Gating the Relayer
+
+In production applications, you want to gate the relayer to only be used in certain cases. This can be accomplished by specifying constraints inside the `SignedDelegate.delegateAction` object:
+
+```typescript
+export declare class DelegateAction extends Assignable {
+    senderId: string;
+    receiverId: string;
+    actions: Array<Action>;
+    nonce: BN;
+    maxBlockHeight: BN;
+    publicKey: PublicKey;
+}
+```
+
+**Example**: Gate by user or contract:
+
+```typescript
+const serializedTx: Buffer = req.body;
+const deserializedTx = deserialize(
+  SCHEMA.SignedDelegate,
+  Buffer.from(serializedTx)
+) as SignedDelegate;
+const delegateAction = deserializedTx?.delegateAction;
+
+if(
+  delegateAction.senderId === 'allowed-user.near' || 
+  delegateAction.receiverId === 'allowed-contract.near'
+) {
+  const receipt = await relayerAccount.signAndSendTransaction({
+    actions: [actionCreators.signedDelegate(deserializedTx)],
+    receiverId: deserializedTx.delegateAction.senderId
+  });
+}
+```
+
+Other examples include limiting deposit or gas, gating by specific smart contract methods, or even inspecting args:
+
+```javascript
+JSON.parse(Buffer.from(args_base64 || "", "base64").toString())
+```
+
+## Rust Relayer Server
+
+The open-source Rust [reference implementation of a Relayer server](https://github.com/near/pagoda-relayer-rs/) offers comprehensive features:
+
+<CardGroup cols={2}>
+  <Card title="Meta Transactions" icon="paper-plane">
+    Sign and send Meta Transactions to cover gas costs while users maintain custody
+  </Card>
+  <Card title="Contract Whitelisting" icon="list-check">
+    Only pay for users interacting with certain contracts
+  </Card>
+  <Card title="Allowances" icon="gauge">
+    Specify gas cost allowances for all accounts or per-user basis
+  </Card>
+  <Card title="OAuth Integration" icon="shield">
+    Require unique OAuth tokens for user registration (sybil resistance)
+  </Card>
+  <Card title="Key Rotation" icon="rotate">
+    Prevent nonce race conditions with multiple keys
+  </Card>
+  <Card title="FastAuth SDK" icon="bolt">
+    Integrate with FastAuth for seamless authentication
+  </Card>
+</CardGroup>
+
+### Basic Setup
+
+<Steps>
+  <Step title="Install Rust">
+    [Install Rust for NEAR Development](/smart-contracts/quickstart#prerequisites)
+  </Step>
+  <Step title="Create NEAR Account">
+    [Create a NEAR account](/protocol/account-model) with sufficient balance to cover gas costs
+  </Step>
+  <Step title="Configure Keys">
+    Create a JSON file with your Full Access Key:
+    
+    ```json keys.json
+    [{
+      "account_id": "example.testnet",
+      "public_key": "ed25519:98GtfFzez3opomVpwa7i4m3nptHtc7Ha514XHMWszLtQ",
+      "private_key": "ed25519:YWuyKVQHE3rJQYRC3pRGV56o1qEtA1PnMYPDEtroc5kX..."
+    }]
+    ```
+  </Step>
+  <Step title="Update Configuration">
+    Update values in `config.toml` for your deployment
+  </Step>
+  <Step title="Open Port">
+    Open the port from `config.toml` in your network settings
+  </Step>
+  <Step title="Run Server">
+    ```bash
+    cargo run
+    # Or with logging enabled:
+    RUST_LOG=tower_http=debug cargo run
+    ```
+  </Step>
+</Steps>
+
+<Info>
+  If you're integrating with FastAuth or using shared storage, make sure to enable feature flags:
+  
+  ```bash
+  cargo build --features fastauth_features,shared_storage
+  ```
+</Info>
+
+### Redis Setup (Optional)
+
+<Note>
+  Only needed if you intend to use whitelisting, allowances, and OAuth functionality.
+</Note>
+
+<Steps>
+  <Step title="Install Redis">
+    [Install Redis](https://redis.io/docs/latest/get-started/) on your machine or use a Docker setup
+  </Step>
+  <Step title="Run Redis Server">
+    ```bash
+    redis-server --bind 127.0.0.1 --port 6379
+    ```
+    Make sure the port matches `redis_url` in `config.toml`
+  </Step>
+  <Step title="Connect to Redis">
+    ```bash
+    redis-cli -h 127.0.0.1 -p 6379
+    ```
+  </Step>
+</Steps>
+
+### Use Cases
+
+The [examples folder](https://github.com/near/pagoda-relayer-rs/tree/main/examples) on GitHub contains configuration files for different use cases:
+
+<AccordionGroup>
+  <Accordion title="No Filters">
+    A relayer that covers gas for all user transactions to all contracts. Should only be used with a secure backend.
+    
+    Config: [`no_filters.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/no_filters.toml)
+  </Accordion>
+
+  <Accordion title="Basic Whitelist">
+    Covers gas for user transactions to interact with a whitelisted set of contracts.
+    
+    Config: [`basic_whitelist.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/basic_whitelist.toml)
+  </Accordion>
+
+  <Accordion title="Redis with Allowances">
+    Covers gas up to an allowance specified in Redis. Requires OAuth token for signup (sybil resistance).
+    
+    Config: [`redis.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/redis.toml)
+  </Accordion>
+
+  <Accordion title="FastAuth Integration">
+    Configuration for [FastAuth SDK](/chain-abstraction/fastauth-sdk) integration with shared storage and whitelisted senders.
+    
+    Config: [`fastauth.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/fastauth.toml)
+    
+    <Warning>
+      FastAuth is currently in private beta. [Contact the team on Telegram](https://t.me/neardev) to try it.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="Pay with Fungible Tokens">
+    Ensures FTs are sent to a burn address to cover the equivalent gas amount.
+    
+    Config: [`pay_with_ft.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/pay_with_ft.toml)
+  </Accordion>
+
+  <Accordion title="Whitelist Senders">
+    Covers gas for a whitelisted set of users' transactions.
+    
+    Config: [`whitelist_senders.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/whitelist_senders.toml)
+  </Accordion>
+
+  <Accordion title="Shared Storage">
+    Covers BOTH gas AND storage fees for user transactions.
+    
+    Config: [`shared_storage.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/shared_storage.toml)
+  </Accordion>
+
+  <Accordion title="Exchange Withdraw">
+    For exchanges to cover user withdraw fees when withdrawing stablecoins on NEAR.
+    
+    Config: [`exchange_withdraw.toml`](https://github.com/near/pagoda-relayer-rs/blob/main/examples/configs/exchange_withdraw.toml)
+  </Accordion>
+</AccordionGroup>
+
+## Limitations
+
+<Warning>
+  **Single Receiver**: A meta transaction, like a normal transaction, can only have one receiver. It's possible to chain additional receipts afterwards, but there is no atomicity guarantee and no roll-back mechanism.
+</Warning>
+
+<Warning>
+  **Accounts Must Be Initialized**: Any transaction must use NONCEs to avoid replay attacks. The NONCE is stored on the access key information that gets initialized when creating an account.
+</Warning>
+
+<Warning>
+  **Nested Delegate Actions**: A transaction is only allowed to contain one single delegate action. Nested delegate actions are disallowed.
+</Warning>
+
+## Gas and Balance Refunds
+
+### Gas Refunds
+
+Gas refund receipts work exactly like normal transactions. At every step, the difference between the pessimistic gas price and the actual gas price is computed and refunded. Gas refunds go to the signer of the original transaction (the relayer).
+
+### Balance Refunds
+
+The protocol sends balance refunds to the predecessor (sender) of the receipt. If an inner action requires an attached balance and the transaction fails execution, the predecessor is the user (not the relayer), so the user receives the refund.
+
+<Danger>
+  Relayer implementations must be aware of this, as there is a financial incentive for users to submit meta transactions with high balances attached that will fail execution.
+</Danger>
+
+## Function Call Access Keys
+
+[Function Call Access Keys](/protocol/access-keys#function-call-keys) are limited to signing transactions for specific methods on a specific contract.
+
+They can have an allowance limiting the amount of tokens spent on gas fees. However, this limit can be circumvented by using meta transactions.
+
+<Note>
+  When a `DelegateAction` is processed, the access key is checked against the receiver and methods called. If allowed, the action executes. However, the allowance is not checked since all costs are covered by the relayer.
+</Note>
+
+## Resources
+
+<CardGroup cols={2}>
+  <Card title="NEP-366 Specification" icon="file-lines" href="https://github.com/near/NEPs/pull/366">
+    Official specification for meta transactions
+  </Card>
+  <Card title="Rust Relayer Server" icon="github" href="https://github.com/near/pagoda-relayer-rs/">
+    Open-source reference implementation
+  </Card>
+  <Card title="API Specification" icon="book" href="https://github.com/near/pagoda-relayer-rs/tree/main?tab=readme-ov-file#api-spec-">
+    Complete relayer server API docs
+  </Card>
+  <Card title="Example Configurations" icon="gear" href="https://github.com/near/pagoda-relayer-rs/tree/main/examples">
+    Sample configs for various use cases
+  </Card>
+</CardGroup>

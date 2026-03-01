@@ -1,0 +1,97 @@
+---
+title: 'What is Data Infrastructure?'
+description: 'Explore NEAR Protocol data infrastructure for accessing and monitoring on-chain data'
+keywords: ['NEAR data infrastructure', 'blockchain data', 'on-chain data', 'NEAR Lake', 'BigQuery', 'data APIs']
+---
+
+NEAR offers ready-to-use solutions to access and monitor on-chain data easily. This is very useful to automate actions based on specific **events**, cache data to **reduce latency**, gather **usage data** of the blockchain, and even **study user preferences**.
+
+<img src="/assets/docs/welcome-pages/6.data-infrastructure.png" alt="NEAR Data Infrastructure Overview" />
+
+In NEAR you will find three main solutions to access and monitor on-chain data: [**Data APIs**](#data-apis), [**BigQuery Public Dataset**](#bigquery-public-dataset) and [**NEAR Lake**](#near-lake). Each of these solutions is designed to fit different needs and use cases, and can be used in combination to create a complete data infrastructure for your application.
+
+---
+
+## Data APIs
+
+Members of the NEAR community have built a set of APIs to access and monitor on-chain data. These APIs are designed to be easy to use and can be accessed from any application through a simple API call.
+
+<Card title="Data APIs" icon="cloud" href="/data-infrastructure/data-apis">
+  Access on-chain data through community-built APIs
+</Card>
+
+**Key Features:**
+- User assets: Easily track all the assets that a user or a contract holds
+- Monitor transactions: Get all the transactions of a user, a contract or a specific token
+- Track on-chain events: Get all the events emitted by a contract, or a specific event type
+
+---
+
+## BigQuery Public Dataset
+
+A large dataset with on-chain data publicly available on Google Cloud Platform. Obtain near real-time blockchain data using simple SQL queries. **All the data, zero setup**.
+
+<Card title="BigQuery" icon="database" href="/data-infrastructure/big-query">
+  Query blockchain data using SQL on Google Cloud Platform
+</Card>
+
+**Key Features:**
+- Instant insights: Historic on-chain data queried at scale. No need to run your own infrastructure.
+- Cost-effective: Eliminate the need to store and process bulk NEAR Protocol data. Query as little or as much data as you like.
+- As easy as SQL: No prior experience with blockchain technology is required. Just bring a general knowledge of SQL to unlock insights.
+
+---
+
+## NEAR Lake
+
+A solution that watches over the NEAR network and stores all the events for your easy access.
+
+<Card title="NEAR Lake Framework" icon="waves" href="/data-infrastructure/near-lake-framework">
+  Build custom indexers with NEAR Lake Framework
+</Card>
+
+**Key Features:**
+- Cost-efficient solution: Build self-hosted indexers in Rust, JavaScript, Python, Go and other languages
+- Streamlined data management: Use NEAR Lake Framework to stream blocks to your server directly from NEAR Lake
+
+---
+
+## Choosing the Right Solution
+
+<AccordionGroup>
+  <Accordion title="When to use Data APIs">
+    Use Data APIs when you need quick access to specific on-chain data without setting up infrastructure. Ideal for:
+    - Querying account balances and assets
+    - Tracking specific transactions
+    - Building user-facing applications that need real-time data
+    - Prototyping and development
+  </Accordion>
+
+  <Accordion title="When to use BigQuery">
+    Use BigQuery when you need to analyze large amounts of historical data. Perfect for:
+    - Data analysis and research
+    - Business intelligence and reporting
+    - Historical trend analysis
+    - Complex queries across multiple blocks
+  </Accordion>
+
+  <Accordion title="When to use NEAR Lake">
+    Use NEAR Lake when you need full control over data processing. Best for:
+    - Custom indexing requirements
+    - Real-time event processing
+    - Building your own data pipelines
+    - Applications requiring specific data transformations
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Conclusion
+
+Data infrastructure is a key component of any blockchain application. It allows developers to access and monitor on-chain data easily, which is essential for building applications that interact with the blockchain.
+
+NEAR offers a range of solutions to help developers build robust data infrastructure for their applications, including Data APIs, BigQuery Public Dataset, and NEAR Lake. By using these solutions in combination, developers can create a complete data infrastructure that meets their specific needs and use cases.
+
+<Tip>
+  Start with Data APIs for quick prototyping, use BigQuery for analytics, and build custom indexers with NEAR Lake for specialized needs.
+</Tip>

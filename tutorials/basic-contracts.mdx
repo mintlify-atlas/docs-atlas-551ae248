@@ -1,0 +1,222 @@
+---
+title: Basic smart contract tutorials
+description: Learn fundamental smart contract concepts through practical examples
+---
+
+Learn the fundamentals of NEAR smart contract development through these hands-on tutorials. Each tutorial builds on core concepts to help you master contract development.
+
+## Available tutorials
+
+<CardGroup cols={2}>
+  <Card title="Hello NEAR" icon="hand-wave" href="https://github.com/near-examples/hello-near-examples">
+    A simple contract that stores and retrieves a greeting message. Perfect for beginners.
+  </Card>
+  
+  <Card title="Guest Book" icon="book" href="https://github.com/near-examples/guest-book-examples">
+    Learn to store and retrieve data with a guest book contract that records messages.
+  </Card>
+  
+  <Card title="Counter" icon="calculator" href="https://github.com/near-examples/counters">
+    Build a counter contract to understand state management and function calls.
+  </Card>
+  
+  <Card title="Status Message" icon="message" href="https://github.com/near-examples/status-message-collections">
+    Create a social status message contract with collections and data structures.
+  </Card>
+</CardGroup>
+
+## What you'll learn
+
+<AccordionGroup>
+  <Accordion title="Contract structure and initialization">
+    - How to structure a NEAR smart contract
+    - Initializing contract state
+    - Using the `#[near]` macro (Rust) or decorators (JavaScript)
+    - Defining contract methods
+  </Accordion>
+  
+  <Accordion title="State management">
+    - Storing and retrieving data
+    - Working with contract storage
+    - Understanding storage costs
+    - Managing state efficiently
+  </Accordion>
+  
+  <Accordion title="Function types">
+    - View functions (read-only, no gas cost)
+    - Change functions (modify state, require gas)
+    - Payable functions (accept NEAR deposits)
+    - Private functions (internal use only)
+  </Accordion>
+  
+  <Accordion title="Testing and deployment">
+    - Writing unit tests
+    - Testing with NEAR Workspaces
+    - Deploying to testnet
+    - Interacting with deployed contracts
+  </Accordion>
+</AccordionGroup>
+
+## Getting started
+
+<Steps>
+  <Step title="Set up your development environment">
+    Install the required tools:
+    
+    <CodeGroup>
+    ```bash Rust
+    # Install Rust
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+    
+    # Install cargo-near
+    cargo install cargo-near
+    
+    # Install NEAR CLI
+    curl --proto '=https' --tlsv1.2 -LsSf \
+      https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh \
+      | sh
+    ```
+    
+    ```bash JavaScript
+    # Install Node.js 20+
+    # Then install dependencies
+    npm install -g near-cli
+    ```
+    </CodeGroup>
+  </Step>
+  
+  <Step title="Clone an example">
+    Start with the Hello NEAR example:
+    
+    ```bash
+    git clone https://github.com/near-examples/hello-near-examples
+    cd hello-near-examples
+    ```
+  </Step>
+  
+  <Step title="Build and test">
+    <Tabs>
+      <Tab title="Rust">
+        ```bash
+        # Build the contract
+        cargo near build
+        
+        # Run tests
+        cargo test
+        ```
+      </Tab>
+      
+      <Tab title="JavaScript">
+        ```bash
+        # Install dependencies
+        npm install
+        
+        # Build the contract
+        npm run build
+        
+        # Run tests
+        npm test
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+  
+  <Step title="Deploy and interact">
+    ```bash
+    # Deploy to testnet
+    near contract deploy <your-account>.testnet \
+      use-file ./target/near/contract.wasm \
+      without-init-call \
+      network-config testnet
+    
+    # Call a method
+    near contract call-function as-transaction <your-account>.testnet \
+      set_greeting json-args '{"greeting":"Hello!"}' \
+      prepaid-gas '30 TeraGas' \
+      attached-deposit '0 NEAR' \
+      network-config testnet
+    ```
+  </Step>
+</Steps>
+
+## Example: Hello NEAR contract
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, log};
+    
+    #[near(contract_state)]
+    pub struct Contract {
+        greeting: String,
+    }
+    
+    impl Default for Contract {
+        fn default() -> Self {
+            Self {
+                greeting: "Hello".to_string(),
+            }
+        }
+    }
+    
+    #[near]
+    impl Contract {
+        #[init]
+        pub fn new(greeting: String) -> Self {
+            Self { greeting }
+        }
+        
+        pub fn get_greeting(&self) -> String {
+            self.greeting.clone()
+        }
+        
+        pub fn set_greeting(&mut self, greeting: String) {
+            log!("Saving greeting: {}", greeting);
+            self.greeting = greeting;
+        }
+    }
+    ```
+  </Tab>
+  
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, near, call, view } from 'near-sdk-js';
+    
+    @NearBindgen({})
+    class Contract {
+      greeting = "Hello";
+      
+      @view({})
+      get_greeting() {
+        return this.greeting;
+      }
+      
+      @call({})
+      set_greeting({ greeting }) {
+        near.log(`Saving greeting: ${greeting}`);
+        this.greeting = greeting;
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Cross-contract calls" icon="arrows-rotate" href="/tutorials/cross-contract-calls">
+    Learn how contracts can interact with each other
+  </Card>
+  
+  <Card title="Testing guide" icon="flask" href="/smart-contracts/testing">
+    Deep dive into testing smart contracts
+  </Card>
+  
+  <Card title="Security best practices" icon="shield" href="/smart-contracts/security">
+    Secure your smart contracts
+  </Card>
+  
+  <Card title="NFT tutorial" icon="image" href="/tutorials/nft-tutorial">
+    Build a complete NFT contract
+  </Card>
+</CardGroup>

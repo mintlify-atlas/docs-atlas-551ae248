@@ -1,0 +1,327 @@
+---
+title: Build a full-stack auction dApp
+description: Complete tutorial building an auction application from smart contract to frontend
+---
+
+Build a complete auction application on NEAR, from smart contract to frontend, learning key concepts along the way.
+
+## Overview
+
+This comprehensive tutorial guides you through building a full-featured auction dApp. You'll learn:
+
+- Creating smart contracts with state management
+- Writing and running tests
+- Deploying contracts to testnet
+- Building a React frontend
+- Querying historical data with indexers
+- Integrating NFTs and FTs
+- Using factory patterns
+
+<CardGroup cols={1}>
+  <Card title="GitHub Repository" icon="github" href="https://github.com/near-examples/auction-examples">
+    View the complete auction example
+  </Card>
+</CardGroup>
+
+## What you'll build
+
+A complete auction platform where users can:
+- Create auctions for items or NFTs
+- Place bids using NEAR or FT tokens
+- Automatically transfer assets to winners
+- View auction history and past bids
+
+## Prerequisites
+
+<AccordionGroup>
+  <Accordion title="Development environment">
+    <Tabs>
+      <Tab title="Rust">
+        ```bash
+        # Install Rust
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+        
+        # Install cargo-near
+        cargo install cargo-near
+        
+        # Install NEAR CLI
+        curl --proto '=https' --tlsv1.2 -LsSf \
+          https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh \
+          | sh
+        ```
+      </Tab>
+      
+      <Tab title="JavaScript">
+        ```bash
+        # Install Node.js 20+
+        # Then install tools
+        npm install -g near-cli
+        npm install -g create-react-app
+        ```
+      </Tab>
+    </Tabs>
+  </Accordion>
+  
+  <Accordion title="NEAR account">
+    Create a testnet account:
+    ```bash
+    near account create-account sponsor-by-faucet-service your-name.testnet \
+      autogenerate-new-keypair save-to-keychain network-config testnet create
+    ```
+  </Accordion>
+</AccordionGroup>
+
+## Tutorial series
+
+Follow these tutorials in order to build the complete application:
+
+### Part 1: Smart contracts
+
+<Steps>
+  <Step title="Basic auction contract">
+    Create the core auction contract with bidding functionality
+    
+    [View tutorial](https://github.com/near-examples/auction-examples/tree/main/contract)
+  </Step>
+  
+  <Step title="Testing">
+    Write comprehensive tests using NEAR Workspaces
+    
+    [View tutorial](https://github.com/near-examples/auction-examples/blob/main/contract/tests/test_basics.rs)
+  </Step>
+  
+  <Step title="Deployment">
+    Deploy to testnet and lock the contract
+    
+    [View deployment guide](/smart-contracts/deploy)
+  </Step>
+</Steps>
+
+### Part 2: Frontend
+
+<Steps>
+  <Step title="React setup">
+    Create a React app and integrate NEAR wallet
+    
+    [View tutorial](https://github.com/near-examples/auction-examples/tree/main/frontend)
+  </Step>
+  
+  <Step title="Contract integration">
+    Connect frontend to smart contract
+    
+    [View integration guide](/web3-apps/integrate-contracts)
+  </Step>
+  
+  <Step title="Indexing historical data">
+    Use indexers to show auction history
+    
+    [View indexing guide](/data-infrastructure/indexers)
+  </Step>
+</Steps>
+
+### Part 3: Advanced features
+
+<Steps>
+  <Step title="NFT auctions">
+    Add support for auctioning NFTs
+    
+    [View NFT guide](/primitives/non-fungible-tokens)
+  </Step>
+  
+  <Step title="FT bidding">
+    Allow bids in fungible tokens
+    
+    [View FT guide](/primitives/fungible-tokens)
+  </Step>
+  
+  <Step title="Factory pattern">
+    Deploy multiple auction contracts
+    
+    [View factory guide](/tutorials/factory-contracts)
+  </Step>
+</Steps>
+
+## Contract structure
+
+Here's the core auction contract:
+
+```rust
+use near_sdk::{
+    near, env, require, AccountId, NearToken,
+    collections::UnorderedMap,
+    json_types::U128,
+};
+
+#[near(serializers = [json, borsh])]
+pub struct Bid {
+    pub bidder: AccountId,
+    pub amount: NearToken,
+}
+
+#[near(contract_state)]
+pub struct AuctionContract {
+    pub owner: AccountId,
+    pub end_time: u64,
+    pub highest_bid: Option<Bid>,
+    pub bids: UnorderedMap<AccountId, NearToken>,
+    pub claimed: bool,
+}
+
+#[near]
+impl AuctionContract {
+    #[init]
+    pub fn new(end_time: u64) -> Self {
+        Self {
+            owner: env::predecessor_account_id(),
+            end_time,
+            highest_bid: None,
+            bids: UnorderedMap::new(b"b"),
+            claimed: false,
+        }
+    }
+    
+    #[payable]
+    pub fn bid(&mut self) {
+        require!(
+            env::block_timestamp() < self.end_time,
+            "Auction has ended"
+        );
+        
+        let bidder = env::predecessor_account_id();
+        let amount = env::attached_deposit();
+        
+        // Check if bid is high enough
+        if let Some(ref highest) = self.highest_bid {
+            require!(
+                amount > highest.amount,
+                "Bid must be higher than current highest bid"
+            );
+            
+            // Refund previous highest bidder
+            Promise::new(highest.bidder.clone())
+                .transfer(highest.amount);
+        }
+        
+        // Record bid
+        self.highest_bid = Some(Bid { bidder: bidder.clone(), amount });
+        self.bids.insert(bidder, amount);
+    }
+    
+    pub fn claim(&mut self) -> Promise {
+        require!(
+            env::block_timestamp() >= self.end_time,
+            "Auction has not ended yet"
+        );
+        require!(!self.claimed, "Already claimed");
+        require!(
+            env::predecessor_account_id() == self.owner,
+            "Only owner can claim"
+        );
+        
+        self.claimed = true;
+        
+        if let Some(ref highest) = self.highest_bid {
+            Promise::new(self.owner.clone())
+                .transfer(highest.amount)
+        } else {
+            env::panic_str("No bids placed");
+        }
+    }
+    
+    pub fn get_highest_bid(&self) -> Option<Bid> {
+        self.highest_bid.clone()
+    }
+}
+```
+
+## Frontend integration
+
+Connect to the contract from React:
+
+```javascript
+import { Wallet } from '@near-wallet-selector/core';
+import { Contract } from 'near-api-js';
+
+class AuctionApp {
+  constructor() {
+    this.wallet = new Wallet({ createAccessKeyFor: '' });
+    this.contract = null;
+  }
+  
+  async init() {
+    await this.wallet.startUp();
+    
+    this.contract = new Contract(
+      this.wallet.account(),
+      'auction.testnet',
+      {
+        viewMethods: ['get_highest_bid'],
+        changeMethods: ['bid', 'claim'],
+      }
+    );
+  }
+  
+  async placeBid(amount) {
+    return await this.contract.bid({
+      args: {},
+      amount: amount,
+    });
+  }
+  
+  async getHighestBid() {
+    return await this.contract.get_highest_bid();
+  }
+}
+
+export default AuctionApp;
+```
+
+## Key concepts learned
+
+By completing this tutorial, you'll master:
+
+<CardGroup cols={2}>
+  <Card title="State management" icon="database">
+    Storing and updating contract state efficiently
+  </Card>
+  
+  <Card title="Payable functions" icon="dollar-sign">
+    Accepting and handling NEAR token deposits
+  </Card>
+  
+  <Card title="Cross-contract calls" icon="arrows-rotate">
+    Interacting with NFT and FT contracts
+  </Card>
+  
+  <Card title="Frontend integration" icon="window">
+    Building React apps connected to NEAR
+  </Card>
+  
+  <Card title="Testing" icon="flask">
+    Comprehensive contract testing strategies
+  </Card>
+  
+  <Card title="Indexing" icon="magnifying-glass">
+    Querying historical blockchain data
+  </Card>
+</CardGroup>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Start the tutorial" icon="rocket" href="https://github.com/near-examples/auction-examples">
+    Begin building the auction dApp
+  </Card>
+  
+  <Card title="NFT tutorial" icon="image" href="/tutorials/nft-tutorial">
+    Learn to build NFT contracts
+  </Card>
+  
+  <Card title="FT tutorial" icon="coins" href="/tutorials/ft-tutorial">
+    Master fungible token contracts
+  </Card>
+  
+  <Card title="More examples" icon="book" href="https://github.com/near-examples">
+    Explore other NEAR examples
+  </Card>
+</CardGroup>

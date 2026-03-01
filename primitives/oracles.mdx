@@ -1,0 +1,231 @@
+---
+title: Oracles
+description: Learn about blockchain oracles on NEAR Protocol, including price feeds, data integration, and using oracle services like NearDefi Price Oracle and Pyth Network.
+---
+
+[Blockchain Oracles](https://en.wikipedia.org/wiki/Blockchain_oracle) serve as intermediaries that connect smart contracts with external (off-chain) data.
+
+**Examples:**
+
+- **Price Feeds**: Real-time pricing for cryptocurrencies, stocks, or commodities.
+- **Event Information**: Updates on real-world events like sports results or weather conditions.
+- **API Access**: Connections to external web services and systems.
+
+<Warning>
+Oracles, being external third-party services, require careful consideration of their reliability, security, and decentralization to avoid risks such as incorrect data, manipulation, or single points of failure.
+</Warning>
+
+---
+
+## Deployed Oracles on NEAR
+
+Here is a directory of third-party oracle services deployed on the NEAR blockchain:
+
+| Name | Creator | Description |
+|------|---------|-------------|
+| [Price Oracle](#price-oracle-by-neardefi) | [NearDefi](https://github.com/NearDeFi) | Open source oracle for real-time asset pricing |
+| [Pyth Network Oracle](#pyth-network-oracle) | [Pyth Network](https://pyth.network/) | High-frequency, low-latency oracle for price feeds |
+
+---
+
+## Price Oracle by NearDefi
+
+- **Creator**: [NearDefi](https://github.com/NearDeFi)
+- **Codebase Repository**: [NearDefi/price-oracle](https://github.com/NearDeFi/price-oracle)
+- **Bot for Data Feeds**: [NearDefi/near-price-oracle-bot](https://github.com/NearDeFi/near-price-oracle-bot)
+- **Deployed Addresses**:
+  - Mainnet: [priceoracle.near](https://nearblocks.io/address/priceoracle.near)
+  - Testnet: [priceoracle.testnet](https://testnet.nearblocks.io/address/priceoracle.testnet)
+
+### Query Assets
+
+<CodeGroup>
+```bash CLI
+near view priceoracle.near get_assets
+```
+
+```bash New CLI
+near contract call-function as-read-only priceoracle.near get_assets json-args {} network-config mainnet now
+```
+</CodeGroup>
+
+Example response:
+```javascript
+[
+  [
+    'wrap.near',
+    {
+      reports: [
+        {
+          oracle_id: 'thorinoracle.near',
+          timestamp: '1669795900809627816',
+          price: { multiplier: '17030', decimals: 28 }
+        },
+        ...
+      ]
+    }
+  ]
+]
+```
+
+### Get Assets Price
+
+<CodeGroup>
+```bash CLI
+near view priceoracle.near get_price_data
+```
+</CodeGroup>
+
+Example response:
+```javascript
+{
+  timestamp: '1706631861981947371',
+  recency_duration_sec: 90,
+  prices: [
+    {
+      asset_id: 'wrap.near',
+      price: { multiplier: '30702', decimals: 28 }
+    },
+    {
+      asset_id: 'aurora',
+      price: { multiplier: '235662', decimals: 20 }
+    },
+    {
+      asset_id: 'meta-pool.near',
+      price: { multiplier: '38770', decimals: 28 }
+    },
+    ...
+  ]
+}
+```
+
+<Tip>
+For USD values, divide the `multiplier` by `10^4`.
+</Tip>
+
+---
+
+## Pyth Network Oracle
+
+- **Creator**: [Pyth Network](https://pyth.network)
+- **Official Documentation**: [Pyth NEAR Docs](https://docs.pyth.network/price-feeds/use-real-time-data/near)
+- **Codebase Repository**: [pyth-network/pyth-crosschain](https://github.com/pyth-network/pyth-crosschain/tree/main/target_chains/near)
+- **Deployed Addresses**:
+  - **Mainnet**: [pyth-oracle.near](https://nearblocks.io/address/pyth-oracle.near)
+  - **Testnet**: [pyth-oracle.testnet](https://testnet.nearblocks.io/address/pyth-oracle.testnet)
+
+### Getting Started
+
+To use Pyth oracle, you need:
+
+- Price ID(s)
+- Hermes API Endpoint
+- Smart contract address
+
+| Network | Price Feed IDs | Hermes API Address | Contract Address |
+|---------|----------------|-------------------|------------------|
+| `testnet` | [NEAR testnet Price Feed IDs](https://www.pyth.network/developers/price-feed-ids#near-testnet) | `hermes-beta.pyth.network` | [pyth-oracle.testnet](https://testnet.nearblocks.io/address/pyth-oracle.testnet) |
+| `mainnet` | [NEAR mainnet Price Feed IDs](https://www.pyth.network/developers/price-feed-ids#near-mainnet) | `hermes.pyth.network` | [pyth-oracle.near](https://nearblocks.io/address/pyth-oracle.near) |
+
+<Note>
+When using Price Feed IDs, you must remove the `0x` prefix.
+
+Example (testnet):
+```javascript
+const PRICE_FEED_ID = 'c415de8d2eba7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750';
+```
+</Note>
+
+---
+
+### Update Price Feeds
+
+Pyth Oracle has two core methods:
+
+1. **`update_price_feeds`** - Updates the Pyth smart contract with the price feed you provide
+   - args: `data` (hex-encoded price feed)
+   - type: `object`
+   - example: `{ "data": "504e41..." }`
+
+2. **`get_price`** - Fetches the most recent price stored in the contract
+   - args: `price_identifier`
+   - type: `object`
+   - example: `{ price_identifier: 'f9c0172ba10dfa8...' }`
+
+#### 1) Fetch Off-Chain Price Feed
+
+You can obtain an off-chain price feed using Pyth's [Hermes API](https://hermes-beta.pyth.network/docs/).
+
+Example (Node.js):
+
+```javascript
+async function getHermesPriceData(priceId) {
+  const hermesEndpoint = 'https://hermes-beta.pyth.network';
+  const url = `${hermesEndpoint}/v2/updates/price/latest?ids[]=${priceId}`;
+  
+  const response = await fetch(url);
+  const data = await response.json();
+  
+  return data.binary.data[0];
+}
+
+const priceId = 'c415de8d2eba7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750';
+const priceData = await getHermesPriceData(priceId);
+```
+
+#### 2) Update Pyth Oracle Contract
+
+After fetching an off-chain price feed, call `update_price_feeds` on the Pyth Oracle:
+
+```javascript
+const pythOracleContract = 'pyth-oracle.testnet';
+
+await wallet.signAndSendTransaction({
+  receiverId: pythOracleContract,
+  actions: [{
+    type: 'FunctionCall',
+    params: {
+      methodName: 'update_price_feeds',
+      args: {
+        data: priceData,
+      },
+      gas: '300000000000000',
+      deposit: '1000000000000000000000',
+    }
+  }]
+});
+```
+
+<Note>
+Although unused deposit will be refunded, you can calculate an estimate by calling the `get_update_fee_estimate` method on the Pyth contract.
+</Note>
+
+---
+
+### Get Price
+
+After updating the price feed, you can view it on-chain by calling `get_price`:
+
+```javascript
+const pythOracleContract = 'pyth-oracle.testnet';
+const priceIdentifier = 'c415de8d2eba7db216527dff4b60e8f3a5311c740dadb233e13e12547e226750';
+
+const price = await wallet.viewMethod({
+  contractId: pythOracleContract,
+  method: 'get_price',
+  args: {
+    price_identifier: priceIdentifier,
+  },
+});
+
+console.log(price);
+```
+
+---
+
+## Additional Resources
+
+- [Pyth Network Documentation](https://docs.pyth.network/)
+- [Pyth Network NEAR Integration](https://docs.pyth.network/price-feeds/use-real-time-data/near)
+- [NearDefi Price Oracle](https://github.com/NearDeFi/price-oracle)
+- [Hermes API Documentation](https://hermes-beta.pyth.network/docs/)

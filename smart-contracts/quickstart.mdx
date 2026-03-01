@@ -1,0 +1,391 @@
+---
+title: Your First Smart Contract
+description: Create your first NEAR smart contract using Rust or JavaScript. Learn how to build, test, and deploy an auction contract.
+---
+
+Welcome! NEAR accounts can store small apps known as smart contracts. In this quick tutorial, we will guide you in creating your first contract on the NEAR **testnet**!
+
+Join us in creating a friendly auction contract, which allows users to place bids, track the highest bidder and claim tokens at the end of the auction.
+
+<Tip>
+**Which language should I use?**
+
+We recommend using **Rust** for production apps due to its mature tooling. However, if you are just prototyping or learning, feel free to use **JavaScript**!
+</Tip>
+
+<Note>
+**Prefer an online IDE?**
+
+Check out [NEAR Playground](https://nearplay.app/) for an easy-to-use online IDE with pre-configured templates.
+</Note>
+
+---
+
+## Prerequisites
+
+Before starting, make sure to set up your development environment.
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    # Install Rust: https://www.rust-lang.org/tools/install
+    curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+    # Contracts will be compiled to wasm, so we need to add the wasm target
+    rustup target add wasm32-unknown-unknown
+
+    # Install NEAR CLI-RS to deploy and interact with the contract
+    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/near-cli-rs/releases/latest/download/near-cli-rs-installer.sh | sh
+
+    # Install cargo near to help building the contract
+    curl --proto '=https' --tlsv1.2 -LsSf https://github.com/near/cargo-near/releases/latest/download/cargo-near-installer.sh | sh
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```bash
+    # Install Node.js using nvm (more options in: https://nodejs.org/en/download)
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    nvm install latest
+
+    # Install NEAR CLI to deploy and interact with the contract
+    npm install -g near-cli-rs@latest
+    ```
+
+    <Warning>
+    For Mac Silicon users, Rosetta is needed to compile contracts:
+    ```bash
+    /usr/sbin/softwareupdate --install-rosetta --agree-to-license
+    ```
+    </Warning>
+  </Tab>
+</Tabs>
+
+---
+
+## Creating the Contract
+
+Create a smart contract by using one of the scaffolding tools:
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    cargo near
+    ```
+    This command will guide you through creating a new NEAR project with an interactive CLI.
+  </Tab>
+  <Tab title="JavaScript">
+    ```bash
+    npx create-near-app@latest
+    ```
+    When prompted, select the **Auction** template to scaffold the auction contract.
+  </Tab>
+</Tabs>
+
+<Info>
+For this tutorial we chose to name the project `auction`, but feel free to use any name you prefer.
+</Info>
+
+---
+
+## Anatomy of the Contract
+
+The auction smart contract allows users to place bids, track the highest bidder and claim tokens at the end of the auction.
+
+Let's explore the different components:
+
+### Contract State & Initialization
+
+The contract stores the highest bid, auction end time, auctioneer address, and a flag to track if proceeds have been claimed. An `init` function is provided to initialize the contract state.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    use near_sdk::{near, env, Promise, NearToken};
+
+    #[near(contract_state)]
+    #[derive(PanicOnDefault)]
+    pub struct Contract {
+        highest_bid: Bid,
+        auction_end_time: u64,
+        auctioneer: AccountId,
+        claimed: bool,
+    }
+
+    #[near]
+    impl Contract {
+        #[init]
+        #[private]
+        pub fn init(end_time: U64, auctioneer: AccountId) -> Self {
+            Self {
+                highest_bid: Bid { bidder: "none".parse().unwrap(), bid: NearToken::from_near(0) },
+                auction_end_time: end_time.into(),
+                auctioneer,
+                claimed: false,
+            }
+        }
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    import { NearBindgen, initialize, near, call, view } from 'near-sdk-js';
+
+    @NearBindgen({requireInit: true})
+    class AuctionContract {
+      highest_bid = { bidder: 'none', bid: '0' };
+      auction_end_time = '';
+      auctioneer = '';
+      claimed = false;
+
+      @initialize({ privateFunction: true })
+      init({ end_time, auctioneer }) {
+        this.auction_end_time = end_time;
+        this.auctioneer = auctioneer;
+      }
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Placing Bids
+
+Users call the `bid` function while attaching a deposit representing their bid amount. The function validates that the auction is ongoing, and if the bid is higher than the current highest, it records the new bid and refunds the previous bidder.
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    #[payable]
+    pub fn bid(&mut self) {
+        let bidder = env::predecessor_account_id();
+        let bid = env::attached_deposit();
+        let now = env::block_timestamp();
+
+        assert!(now < self.auction_end_time, "Auction has ended");
+        assert!(bid > self.highest_bid.bid, "Bid is too low");
+
+        // Refund previous bidder
+        if self.highest_bid.bidder != "none" {
+            Promise::new(self.highest_bid.bidder.clone())
+                .transfer(self.highest_bid.bid);
+        }
+
+        // Store new highest bid
+        self.highest_bid = Bid { bidder, bid };
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @call({ payableFunction: true })
+    bid() {
+      const bidder = near.predecessorAccountId();
+      const bid = near.attachedDeposit();
+
+      assert(near.blockTimestamp() < this.auction_end_time, "Auction ended");
+      assert(BigInt(bid) > BigInt(this.highest_bid.bid), "Bid too low");
+
+      // Refund previous bidder
+      if (this.highest_bid.bidder !== 'none') {
+        const promise = near.promiseBatchCreate(this.highest_bid.bidder);
+        near.promiseBatchActionTransfer(promise, BigInt(this.highest_bid.bid));
+      }
+
+      this.highest_bid = { bidder, bid };
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### Claiming Proceeds
+
+Once the auction ends, any user can call `claim` to transfer the winning bid to the auctioneer:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    pub fn claim(&mut self) {
+        assert!(env::block_timestamp() >= self.auction_end_time, "Auction ongoing");
+        assert!(!self.claimed, "Already claimed");
+
+        self.claimed = true;
+        Promise::new(self.auctioneer.clone())
+            .transfer(self.highest_bid.bid);
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @call({})
+    claim() {
+      assert(near.blockTimestamp() >= this.auction_end_time, "Auction ongoing");
+      assert(!this.claimed, "Already claimed");
+
+      this.claimed = true;
+      const promise = near.promiseBatchCreate(this.auctioneer);
+      near.promiseBatchActionTransfer(promise, BigInt(this.highest_bid.bid));
+    }
+    ```
+  </Tab>
+</Tabs>
+
+### View Methods
+
+Users can query the current state of the auction by calling view methods:
+
+<Tabs>
+  <Tab title="Rust">
+    ```rust
+    pub fn get_highest_bid(&self) -> &Bid {
+        &self.highest_bid
+    }
+
+    pub fn get_auction_end_time(&self) -> U64 {
+        self.auction_end_time.into()
+    }
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```javascript
+    @view({})
+    get_highest_bid() {
+      return this.highest_bid;
+    }
+
+    @view({})
+    get_auction_end_time() {
+      return this.auction_end_time;
+    }
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## Test the Contract
+
+Let's make sure the contract works by running its tests:
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    cargo test
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```bash
+    npm run test
+    ```
+
+    <Warning>
+    Failing tests? Make sure you're using Node v24/22/20, and that you have installed Rosetta if you have a Mac with Apple Silicon.
+    </Warning>
+  </Tab>
+</Tabs>
+
+---
+
+## Build & Deploy
+
+Now let's deploy the contract to testnet!
+
+### Build the Contract
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    cargo near build non-reproducible-wasm
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```bash
+    npm run build
+    ```
+  </Tab>
+</Tabs>
+
+### Create an Account
+
+```bash
+# Replace <contract-acc.testnet> with a name for your contract account
+near create-account <contract-acc.testnet> --useFaucet
+```
+
+<Tip>
+If you already have a testnet account, you can log in with `near login`.
+</Tip>
+
+### Deploy
+
+<Tabs>
+  <Tab title="Rust">
+    ```bash
+    near deploy <contract-acc.testnet> ./target/near/auction.wasm
+    ```
+  </Tab>
+  <Tab title="JavaScript">
+    ```bash
+    near deploy <contract-acc.testnet> ./build/auction.wasm
+    ```
+  </Tab>
+</Tabs>
+
+<Success>
+Congrats! Your contract now lives in the NEAR testnet network.
+</Success>
+
+---
+
+## Interacting with the Contract
+
+### Initialize the Contract
+
+```bash
+# Get a timestamp for 5 minutes from now (in nanoseconds)
+FIVE_MINUTES_FROM_NOW=$(( $(date +%s%N) + 5 * 60 * 1000000000 ))
+
+# Initialize the auction
+near call <contract-acc.testnet> init "{\"end_time\": \"$FIVE_MINUTES_FROM_NOW\", \"auctioneer\": \"influencer.testnet\"}" --useAccount <contract-acc.testnet>
+```
+
+### Place a Bid
+
+```bash
+# Create a new account to place the bid
+near create-account <bidder-account.testnet> --useFaucet
+
+# Place a bid of 0.01 NEAR
+near call <contract-acc.testnet> bid '{}' --deposit 0.01 --useAccount <bidder-account.testnet>
+```
+
+### Get Highest Bid
+
+```bash
+near view <contract-acc.testnet> get_highest_bid '{}'
+```
+
+### Claim Proceeds
+
+After the auction ends:
+
+```bash
+near call <contract-acc.testnet> claim '{}' --useAccount <contract-acc.testnet>
+```
+
+---
+
+## Next Steps
+
+<CardGroup cols={2}>
+  <Card title="Contract Anatomy" icon="microscope" href="/smart-contracts/anatomy">
+    Learn more about contract structure and components
+  </Card>
+  <Card title="Testing" icon="flask" href="/smart-contracts/testing">
+    Deep dive into contract testing strategies
+  </Card>
+  <Card title="Security" icon="shield" href="/smart-contracts/security">
+    Best practices for secure smart contracts
+  </Card>
+  <Card title="Cross-Contract Calls" icon="network-wired" href="/smart-contracts/crosscontract">
+    Learn how contracts interact with each other
+  </Card>
+</CardGroup>

@@ -1,0 +1,338 @@
+---
+title: 'BigQuery Public Dataset'
+description: 'Learn how to use NEAR Protocol BigQuery public dataset for blockchain data analysis, including querying on-chain data, understanding costs, and accessing historical transaction data'
+keywords: ['NEAR BigQuery', 'blockchain analytics', 'SQL queries', 'on-chain data', 'Google Cloud Platform', 'data analysis']
+---
+
+This document provides an overview of the BigQuery public dataset that allows users to query historical on-chain data from the NEAR Protocol. It includes setup instructions, example queries, and information about the available data structures.
+
+---
+
+## NEAR Public Lakehouse
+
+Blockchain data indexing in NEAR Public Lakehouse is for anyone wanting to understand blockchain data. This includes:
+
+<CardGroup cols={3}>
+  <Card title="Users" icon="user">
+    Create queries to track NEAR assets, monitor transactions, or analyze on-chain events at a massive scale.
+  </Card>
+  <Card title="Researchers" icon="flask">
+    Use indexed data for data science tasks, including on-chain activities, identifying trends, or feeding AI/ML pipelines for predictive analysis.
+  </Card>
+  <Card title="Startups" icon="rocket">
+    Use NEAR's indexed data for deep insights on user engagement, smart contract utilization, or insights across tokens and NFT adoption.
+  </Card>
+</CardGroup>
+
+### Key Benefits
+
+<CardGroup cols={3}>
+  <Card title="Instant Insights" icon="bolt">
+    Historical on-chain data queried at scale. No infrastructure needed.
+  </Card>
+  <Card title="Cost-Effective" icon="dollar-sign">
+    Eliminate the need to store and process bulk NEAR protocol data. Query as little or as much as you need.
+  </Card>
+  <Card title="Easy to Use" icon="check">
+    No prior blockchain experience required. Just bring SQL knowledge to unlock insights.
+  </Card>
+</CardGroup>
+
+---
+
+## Getting Started
+
+<Steps>
+  <Step title="Login to Google Cloud">
+    Login into your [Google Cloud Account](https://console.cloud.google.com/).
+  </Step>
+  <Step title="Open NEAR Dataset">
+    Open the [NEAR Protocol BigQuery Public Dataset](https://console.cloud.google.com/bigquery?p=bigquery-public-data&d=crypto_near_mainnet_us&page=dataset).
+  </Step>
+  <Step title="View Dataset">
+    Click the <kbd>VIEW DATASET</kbd> button to access the tables.
+  </Step>
+  <Step title="Create Query">
+    Click the <kbd>+</kbd> button to create a new tab and write your query.
+  </Step>
+  <Step title="Run Query">
+    Click the <kbd>RUN</kbd> button and check the `Query results` below the query window.
+  </Step>
+</Steps>
+
+<Info>
+  The [NEAR Public Lakehouse repository](https://github.com/near/near-public-lakehouse) contains the source code for ingesting NEAR Protocol data stored as JSON files in AWS S3 by [NEAR Lake Indexer](https://github.com/near/near-lake-indexer).
+</Info>
+
+---
+
+## Example Queries
+
+### Daily Unique Signers and Accounts
+
+How many unique signers and accounts have interacted with my smart contract per day?
+
+```sql
+SELECT
+  ra.block_date collected_for_day,
+  COUNT(DISTINCT t.signer_account_id) as total_signers,
+  COUNT(DISTINCT ra.receipt_predecessor_account_id) as total_accounts
+FROM `bigquery-public-data.crypto_near_mainnet_us.receipt_actions` ra
+  JOIN `bigquery-public-data.crypto_near_mainnet_us.receipt_origin_transaction` ro 
+    ON ro.receipt_id = ra.receipt_id
+  JOIN `bigquery-public-data.crypto_near_mainnet_us.transactions` t 
+    ON ro.originated_from_transaction_hash = t.transaction_hash
+WHERE ra.action_kind = 'FUNCTION_CALL'
+  AND ra.receipt_receiver_account_id = 'social.near' -- change to your contract
+GROUP BY 1
+ORDER BY 1 DESC;
+```
+
+### Top Token Holders
+
+```sql
+SELECT
+  receiver_account_id,
+  SUM(CAST(args_json->>'amount' AS NUMERIC)) as total_balance
+FROM `bigquery-public-data.crypto_near_mainnet_us.receipt_actions`
+WHERE receipt_receiver_account_id = 'token.near' -- change to your token contract
+  AND action_kind = 'FUNCTION_CALL'
+  AND method_name = 'ft_transfer'
+GROUP BY 1
+ORDER BY 2 DESC
+LIMIT 100;
+```
+
+### Transaction Volume by Date
+
+```sql
+SELECT
+  block_date,
+  COUNT(*) as transaction_count
+FROM `bigquery-public-data.crypto_near_mainnet_us.transactions`
+WHERE block_date >= '2024-01-01'
+GROUP BY 1
+ORDER BY 1 DESC;
+```
+
+<Tip>
+  Always specify `block_date` in your WHERE clause to limit the data scanned and reduce costs.
+</Tip>
+
+---
+
+## How Much It Costs?
+
+<Tabs>
+  <Tab title="Storage Costs">
+    **NEAR pays for the storage** and doesn't charge you to use the public dataset.
+
+    To learn more about BigQuery public datasets [check this page](https://cloud.google.com/bigquery/public-data).
+  </Tab>
+  <Tab title="Query Costs">
+    **Google GCP charges for the queries** that you perform on the data.
+
+    **Current pricing (as of 2024):**
+    - On-demand (per TB): $6.25 per TB
+    - First 1 TB per month: **FREE**
+
+    Check [Google's pricing page](https://cloud.google.com/bigquery/pricing#analysis_pricing_models) for detailed pricing info, options, and best practices.
+  </Tab>
+</Tabs>
+
+<Tip>
+  You can check how much data will be scanned before running a query in the BigQuery console UI. Since BigQuery uses a columnar data structure and partitions, it's recommended to select only the columns and partitions (`block_date`) needed to avoid unnecessary query costs.
+</Tip>
+
+<img src="/assets/docs/data-infrastructure/BQ_Query_Cost.png" alt="BigQuery query cost estimation in the console UI" />
+
+### Cost Optimization Tips
+
+<AccordionGroup>
+  <Accordion title="Use partition filters">
+    Always filter by `block_date` to reduce the amount of data scanned:
+    ```sql
+    WHERE block_date >= '2024-01-01' AND block_date < '2024-02-01'
+    ```
+  </Accordion>
+
+  <Accordion title="Select specific columns">
+    Only select the columns you need instead of using `SELECT *`:
+    ```sql
+    SELECT block_date, transaction_hash, signer_account_id
+    FROM `bigquery-public-data.crypto_near_mainnet_us.transactions`
+    ```
+  </Accordion>
+
+  <Accordion title="Use LIMIT for exploration">
+    When exploring data, use LIMIT to reduce scanned data:
+    ```sql
+    SELECT * FROM table LIMIT 100
+    ```
+  </Accordion>
+
+  <Accordion title="Preview before running">
+    Use the query validator to see estimated costs before running expensive queries.
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Architecture
+
+The data is loaded in a streaming fashion using [Databricks Autoloader](https://docs.gcp.databricks.com/ingestion/auto-loader/index.html) into raw/bronze tables, and transformed with [Databricks Delta Live Tables](https://www.databricks.com/product/delta-live-tables) streaming jobs into cleaned/enriched/silver tables.
+
+The silver tables are also copied into the [GCP BigQuery Public Dataset](https://cloud.google.com/bigquery/public-data).
+
+<img src="/assets/docs/data-infrastructure/Architecture.png" alt="NEAR Public Lakehouse Architecture diagram" />
+
+<Info>
+  Learn more about the [Databricks Medallion Architecture](https://www.databricks.com/glossary/medallion-architecture).
+</Info>
+
+---
+
+## Available Data
+
+The current data that NEAR is providing was inspired by [NEAR Indexer for Explorer](https://github.com/near/near-indexer-for-explorer/).
+
+<Note>
+  NEAR plans to improve the data available in the NEAR Public Lakehouse making it easier to consume by denormalizing some tables.
+</Note>
+
+### Tables Overview
+
+<AccordionGroup>
+  <Accordion title="blocks">
+    A structure that represents an entire block in the NEAR blockchain.
+    
+    **Block** is the main entity in NEAR Protocol blockchain. Blocks are produced in NEAR Protocol every second.
+    
+    **Key columns:** `block_hash`, `block_height`, `block_timestamp`, `prev_block_hash`, `author_account_id`
+  </Accordion>
+
+  <Accordion title="chunks">
+    A structure that represents a chunk in the NEAR blockchain.
+    
+    **Chunk** of a Block is a part of a Block from a Shard. The collection of Chunks of the Block forms the NEAR Protocol Block. Chunk contains all the structures that make the Block: Transactions, Receipts, and Chunk Header.
+    
+    **Key columns:** `chunk_hash`, `shard_id`, `signature`, `gas_limit`, `gas_used`
+  </Accordion>
+
+  <Accordion title="transactions">
+    Transaction is the main way of interaction between a user and a blockchain.
+    
+    Transaction contains: Signer account ID, Receiver account ID, and Actions.
+    
+    **Key columns:** `transaction_hash`, `signer_account_id`, `receiver_account_id`, `status`, `block_timestamp`
+  </Accordion>
+
+  <Accordion title="execution_outcomes">
+    Execution outcome is the result of execution of Transaction or Receipt.
+    
+    In the result of the Transaction execution will always be a Receipt.
+    
+    **Key columns:** `receipt_id`, `executed_in_block_hash`, `status`, `gas_burnt`, `tokens_burnt`
+  </Accordion>
+
+  <Accordion title="receipt_details">
+    All cross-contract communication in NEAR happens through Receipts.
+    
+    Receipts are stateful in a sense that they serve not only as messages between accounts but also can be stored in the account storage to await DataReceipts. Each receipt has a `predecessor_id` (who sent it) and `receiver_id` (the current account).
+    
+    **Key columns:** `receipt_id`, `predecessor_account_id`, `receiver_account_id`, `receipt_kind`
+  </Accordion>
+
+  <Accordion title="receipt_origin">
+    Tracks the transaction that originated the receipt.
+    
+    Links receipts back to their originating transaction for tracing transaction flows.
+    
+    **Key columns:** `receipt_id`, `originated_from_transaction_hash`
+  </Accordion>
+
+  <Accordion title="receipt_actions">
+    Action Receipt represents a request to apply actions on the `receiver_id` side.
+    
+    It could be derived as a result of a Transaction execution or another ACTION Receipt processing.
+    
+    **Action kinds:** `ADD_KEY`, `CREATE_ACCOUNT`, `DELEGATE_ACTION`, `DELETE_ACCOUNT`, `DELETE_KEY`, `DEPLOY_CONTRACT`, `FUNCTION_CALL`, `STAKE`, `TRANSFER`
+    
+    **Key columns:** `receipt_id`, `action_kind`, `method_name`, `args_json`, `deposit`, `gas`
+  </Accordion>
+
+  <Accordion title="receipts (view)">
+    A convenient view that joins receipt details, the transaction that originated the receipt, and the receipt execution outcome.
+    
+    **Recommended for most queries** as it provides a complete picture of receipt execution.
+    
+    <Warning>
+      Select only the columns and partitions (`block_date`) needed to avoid unnecessary query costs.
+    </Warning>
+  </Accordion>
+
+  <Accordion title="account_changes">
+    Each account has an associated state where it stores its metadata and all the contract-related data (contract's code + storage).
+    
+    Tracks changes to account state over time.
+    
+    **Key columns:** `account_id`, `block_timestamp`, `caused_by_receipt_id`, `update_reason`
+  </Accordion>
+</AccordionGroup>
+
+---
+
+## Additional Information
+
+<Warning>
+  **Skipped Blocks:** NEAR Blockchain can contain skipped blocks, e.g. block `57730443`. For these cases we can find the block for the chunk data using the `prev_block_hash` column:
+  
+  ```sql
+  SELECT * 
+  FROM chunks c 
+  JOIN blocks b ON c.chunk.header.prev_block_hash = b.header.prev_hash
+  ```
+</Warning>
+
+### References
+
+<CardGroup cols={3}>
+  <Card title="Protocol Basics" icon="book" href="/protocol/basics">
+    Learn about NEAR Protocol fundamentals
+  </Card>
+  <Card title="Data Flow" icon="arrow-right" href="/protocol/data-flow">
+    Understand how data flows in NEAR
+  </Card>
+  <Card title="Protocol Spec" icon="file-code" href="https://nomicon.io/">
+    Read the complete protocol specification
+  </Card>
+</CardGroup>
+
+---
+
+## Use Cases
+
+<Tabs>
+  <Tab title="Analytics">
+    - Track transaction volume over time
+    - Analyze user behavior patterns
+    - Monitor smart contract usage
+    - Identify trending dApps
+  </Tab>
+  <Tab title="Research">
+    - Study network growth metrics
+    - Analyze token distribution
+    - Research on-chain activity patterns
+    - Build ML models on blockchain data
+  </Tab>
+  <Tab title="Business Intelligence">
+    - Monitor your dApp's usage
+    - Track user acquisition
+    - Analyze conversion funnels
+    - Generate usage reports
+  </Tab>
+</Tabs>
+
+<Card title="Get Started with BigQuery" icon="rocket" href="https://console.cloud.google.com/bigquery?p=bigquery-public-data&d=crypto_near_mainnet_us&page=dataset">
+  Open the NEAR BigQuery Public Dataset and start querying
+</Card>

@@ -1,0 +1,113 @@
+---
+title: 'Protocol'
+description: 'Learn how to retrieve the genesis and current protocol configurations'
+---
+
+The RPC API enables you to retrieve the current genesis and protocol configuration.
+
+## Quick Reference
+
+| Method | Parameters | Description |
+|--------|------------|-------------|
+| [`genesis_config`](#genesis-config) | _none_ | Returns current genesis configuration |
+| [`EXPERIMENTAL_protocol_config`](#protocol-config) | `finality` OR `block_id` | Returns protocol configuration for latest or specific block |
+
+## Genesis Config
+
+Returns current genesis configuration.
+
+<ParamField query="method" type="string" required>
+  `genesis_config`
+</ParamField>
+
+<ParamField query="params" type="none">
+  _none_
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "genesis_config"
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://test.rpc.fastnear.com",
+});
+
+const response = await provider.experimental_protocolConfig({
+  sync_checkpoint: 'genesis',
+});
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=genesis_config
+```
+</CodeGroup>
+
+For error handling information, see the [RPC Errors](/api/rpc/errors) documentation.
+
+## Protocol Config
+
+Returns most recent protocol configuration or a specific queried block. Useful for finding current storage and transaction costs.
+
+<ParamField query="method" type="string" required>
+  `EXPERIMENTAL_protocol_config`
+</ParamField>
+
+<ParamField query="finality" type="string">
+  Block finality (`optimistic`, `near-final`, or `final`). See [finality param](/api/rpc/setup#using-finality-param).
+</ParamField>
+
+<ParamField query="block_id" type="number | string">
+  Block height or hash. See [block_id param](/api/rpc/setup#using-block_id-param).
+</ParamField>
+
+<CodeGroup>
+```json JSON
+{
+  "jsonrpc": "2.0",
+  "id": "dontcare",
+  "method": "EXPERIMENTAL_protocol_config",
+  "params": {
+    "finality": "final"
+  }
+}
+```
+
+```javascript JavaScript
+import { JsonRpcProvider } from "near-api-js";
+
+const provider = new JsonRpcProvider({
+    url: "https://test.rpc.fastnear.com",
+});
+
+const response = await provider.experimental_protocolConfig({
+  finality: "final"
+});
+```
+
+```bash HTTPie
+http POST https://rpc.testnet.near.org \
+  jsonrpc=2.0 \
+  id=dontcare \
+  method=EXPERIMENTAL_protocol_config \
+  params:='{"finality": "final"}'
+```
+</CodeGroup>
+
+## Best Practices
+
+- Use `finality: "final"` for most recent confirmed protocol configuration
+- Use specific `block_id` when you need protocol config for a particular block
+- Cache protocol configuration results as they change infrequently
+- Use the protocol config to calculate current storage and transaction costs
+- Handle network timeouts gracefully in production applications

@@ -1,0 +1,80 @@
+---
+title: NEAR Networks
+description: Explore the different networks available in NEAR
+---
+
+NEAR Protocol operates on several networks, each with its own independent validators and unique state. These networks are designed to serve different purposes, from production-ready applications to testing and development environments.
+
+---
+
+## Overview of NEAR Networks
+
+<CardGroup cols={3}>
+  <Card title="Mainnet" icon="globe" href="#mainnet">
+    Production-ready network for live applications
+  </Card>
+  <Card title="Testnet" icon="flask" href="#testnet">
+    Testing environment that mirrors mainnet
+  </Card>
+  <Card title="Localnet" icon="computer" href="#localnet">
+    Local development network
+  </Card>
+</CardGroup>
+
+---
+
+## Mainnet
+
+`mainnet` is for production ready smart contracts and live token transfers. Contracts ready for `mainnet` should have gone through rigorous testing and independent security reviews if necessary. `mainnet` is the only network where state is guaranteed to persist over time _(subject to the typical security guarantees of the network's validation process)_.
+
+<ParamField path="Status" type="string">
+  `https://rpc.mainnet.near.org/status`
+</ParamField>
+
+<CardGroup cols={3}>
+  <Card title="Explorer" icon="magnifying-glass" href="https://nearblocks.io">
+    NearBlocks Explorer
+  </Card>
+  <Card title="Wallet" icon="wallet" href="https://wallet.near.org">
+    NEAR Wallet
+  </Card>
+  <Card title="Epoch Sync" icon="rotate" href="https://near-nodes.io/intro/node-epoch-sync">
+    Node synchronization
+  </Card>
+</CardGroup>
+
+---
+
+## Testnet
+
+`testnet` is a public network and the final testing network for `nearcore` changes before deployment to `mainnet`. `testnet` is intended for testing all aspects of the NEAR platform prior to `mainnet` deployment. From account creation, mock token transfers, development tooling, and smart contract development, the `testnet` environment closely resembles `mainnet` behavior. All `nearcore` changes are deployed as release candidates on first testnet, before the changes are released on `mainnet`. A number of `testnet` validators validate transactions and create new blocks. dApp developers deploy their applications on `testnet` before deploying on `mainnet`.
+
+<Info>
+  It is important to note that `testnet` has its own transactions and states.
+</Info>
+
+<ParamField path="Status" type="string">
+  `https://rpc.testnet.near.org/status`
+</ParamField>
+
+<CardGroup cols={3}>
+  <Card title="Explorer" icon="magnifying-glass" href="https://testnet.nearblocks.io">
+    Testnet Explorer
+  </Card>
+  <Card title="Wallet" icon="wallet" href="https://testnet.mynearwallet.com/">
+    Testnet Wallet
+  </Card>
+  <Card title="Epoch Sync" icon="rotate" href="https://near-nodes.io/intro/node-epoch-sync">
+    Node synchronization
+  </Card>
+</CardGroup>
+
+---
+
+## Localnet
+
+`localnet` is intended for developers who want to work with the NEAR platform independent of the public blockchain. You will need to generate nodes yourself. `localnet` gives you the total control over accounts, economics, and other factors for more advanced use cases (including making changes to `nearcore`). For developers, `localnet` is the right choice if you prefer to avoid leaking information about your work during the development process.
+
+<Card title="Learn More" icon="arrow-right" href="https://near-nodes.io/validator/running-a-node">
+  More on local development
+</Card>
